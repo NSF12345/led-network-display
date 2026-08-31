@@ -15,6 +15,14 @@ reimplemented here in Python instead of Node-RED.
 > I have taken great care to review & understand all
 > code changes made by AI tools within this project.
 
+![Live SNMP data](docs/live.gif)
+
+*Live mode - polling a real switch over SNMP ([static preview](docs/live.png))*
+
+![Dummy data](docs/dummy.gif)
+
+*Dummy mode - synthetic traffic, no hardware needed ([static preview](docs/dummy.png))*
+
 ## Traffic source (`TRAFFIC_SOURCE` in `.env`)
 
 - **`dummy` (default)** - generates synthetic RX/TX traffic (slow
@@ -157,7 +165,7 @@ python -m app.main
 ```
 docker compose up -d
 ```
-**Write action** - pulls `ghcr.io/nsf12345/led-network-poller` and
+Pulls `ghcr.io/nsf12345/led-network-poller` and
 starts the container. The package is private, so the host running this
 needs `docker login ghcr.io` first (a PAT with `read:packages` scope).
 
@@ -165,11 +173,14 @@ Check it started and see the first poll cycle:
 ```
 docker compose logs -f led-network-poller
 ```
-**Read-only.** Look for `RX ... B/s  TX ... B/s` lines once per
-`POLL_INTERVAL_SECONDS`. An `SNMP poll failed` traceback here means
-check credentials/ifIndex/reachability, not a code bug - SNMP doesn't
-distinguish "wrong password" from "wrong IP" in its errors, it just
-times out either way.
+By default (`LOG_LEVEL=INFO`) this only shows startup/connection
+messages - the per-poll `RX ... B/s  TX ... B/s` line is `DEBUG`-only,
+since it'd otherwise print forever in a long-running container and
+the web preview already shows live rates anyway. Set `LOG_LEVEL=DEBUG`
+in `.env` to see it (or any other troubleshooting detail). An `SNMP
+poll failed` traceback here means check credentials/ifIndex/
+reachability, not a code bug - SNMP doesn't distinguish "wrong
+password" from "wrong IP" in its errors, it just times out either way.
 
 Then open `http://<host>:<port>` in a browser (port is whatever you've
 mapped in `docker-compose.yml`) - you should see the source banner,
@@ -196,7 +207,7 @@ how the image gets built/published and how to cut a release.
 
 Once you have a WLED controller on the network:
 1. Set `WLED_ENABLED=true`, `WLED_HOST=<controller ip>` in `.env`
-2. `docker compose up -d` to pick up the env change - **write action**,
+2. `docker compose up -d` to pick up the env change,
    recreates the container
 3. Confirm frames arriving: WLED's UI should show "Live" / realtime mode
    active while the container runs, and revert to its normal preset
