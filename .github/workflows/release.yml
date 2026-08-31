@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # needed to explicitly trigger docker-publish.yml below
 
 jobs:
   tag-release:
@@ -61,3 +62,17 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "v${{ steps.ver.outputs.version }}"
           git push origin "v${{ steps.ver.outputs.version }}"
+
+      - name: Trigger the image build
+        # A push made with GITHUB_TOKEN does NOT trigger other workflows
+        # via the normal push-event chain (GitHub's own anti-loop
+        # restriction) - so the tag push above alone would silently never
+        # build an image. An explicit workflow_dispatch call like this is
+        # allowed though, so trigger docker-publish.yml directly, against
+        # the tag we just pushed.
+        run: |
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/docker-publish.yml/dispatches" \
+            -d "{\"ref\":\"v${{ steps.ver.outputs.version }}\"}"
