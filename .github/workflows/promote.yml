@@ -32,8 +32,11 @@ jobs:
 
       - name: Point :latest at the given version
         # Re-tags the already-published image manifest directly via the
-        # registry API - no rebuild, no pulling image content.
+        # registry API - no rebuild, no pulling image content. Docker
+        # image names must be lowercase, but github.repository preserves
+        # the owner's actual casing (NSF12345/...) - lowercase it first.
         run: |
+          repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           docker buildx imagetools create \
-            -t ghcr.io/${{ github.repository }}:latest \
-            ghcr.io/${{ github.repository }}:${{ inputs.version }}
+            -t "ghcr.io/$repo:latest" \
+            "ghcr.io/$repo:${{ inputs.version }}"
