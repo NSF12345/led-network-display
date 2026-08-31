@@ -12,10 +12,22 @@ import time
 from .config import config
 from .outputs import WebsocketOutput, WledOutput
 from .renderer import ParticleRenderer
-from .snmp_poller import SnmpPoller
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
+
+
+def build_traffic_source():
+    """Import pysnmp only if actually needed — dummy mode should never
+    require it to be installed correctly."""
+    if config.TRAFFIC_SOURCE == "snmp":
+        from .snmp_poller import SnmpPoller
+        return SnmpPoller(config)
+    elif config.TRAFFIC_SOURCE == "dummy":
+        from .dummy_traffic_source import DummyTrafficSource
+        return DummyTrafficSource(config)
+    else:
+        raise RuntimeError(f"Unknown TRAFFIC_SOURCE: {config.TRAFFIC_SOURCE!r} (expected 'dummy' or 'snmp')")
 
 
 async def render_loop(renderer: ParticleRenderer, sinks: list):
@@ -39,7 +51,7 @@ async def render_loop(renderer: ParticleRenderer, sinks: list):
 
 async def main():
     renderer = ParticleRenderer(config)
-    poller = SnmpPoller(config)
+    poller = build_traffic_source()
 
     sinks = []
     if config.WEB_ENABLED:

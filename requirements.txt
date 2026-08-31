@@ -1,5 +1,8 @@
-# pysnmp-lextudio is the maintained fork of pysnmp (original project is
-# unmaintained). Verify this version still exposes pysnmp.hlapi.v3arch.asyncio
-# after install — pysnmp's high-level API has moved before across majors.
-pysnmp-lextudio==6.1.4
 aiohttp==3.10.11
+
+# Only required when TRAFFIC_SOURCE=snmp (default is "dummy", which doesn't
+# import this at all). pysnmp-lextudio is the maintained fork of pysnmp
+# (original project is unmaintained). Verify this version still exposes
+# pysnmp.hlapi.v3arch.asyncio after install — pysnmp's high-level API has
+# moved before across majors.
+pysnmp-lextudio==6.1.4

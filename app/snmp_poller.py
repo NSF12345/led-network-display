@@ -14,8 +14,8 @@ regardless of which exact API shape your installed version expects.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass
 
+from .traffic_rates import TrafficRates
 from pysnmp.hlapi.v3arch.asyncio import (
     ContextData,
     ObjectIdentity,
@@ -55,12 +55,6 @@ PRIV_PROTOCOLS = {
     "AES256": usmAesCfb256Protocol,
     "NONE": usmNoPrivProtocol,
 }
-
-
-@dataclass
-class TrafficRates:
-    rx_bytes_per_sec: float
-    tx_bytes_per_sec: float
 
 
 class SnmpPoller:

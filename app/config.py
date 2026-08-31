@@ -27,18 +27,31 @@ def _get_float(name: str, default: float) -> float:
 
 
 class Config:
-    # --- SNMP target ---
-    SNMP_HOST = _get("SNMP_HOST", required=True)
+    # --- Traffic source ---
+    # "dummy" generates synthetic RX/TX traffic — no SNMP target needed, for
+    # building/testing the pipeline before a real device is wired up.
+    # "snmp" polls a real device (see SnmpPoller) — requires the SNMP_* fields below.
+    TRAFFIC_SOURCE = _get("TRAFFIC_SOURCE", "dummy").lower()
+
+    # --- SNMP target (only required when TRAFFIC_SOURCE=snmp) ---
+    _snmp_required = TRAFFIC_SOURCE == "snmp"
+    SNMP_HOST = _get("SNMP_HOST", required=_snmp_required)
     SNMP_PORT = _get_int("SNMP_PORT", 161)
-    SNMP_IF_INDEX = _get_int("SNMP_IF_INDEX", required=True)  # ifIndex of the port to monitor
+    SNMP_IF_INDEX = _get_int("SNMP_IF_INDEX", required=_snmp_required)  # ifIndex of the port to monitor
 
     # SNMPv3 auth (USM)
-    SNMP_USER = _get("SNMP_USER", required=True)
+    SNMP_USER = _get("SNMP_USER", required=_snmp_required)
     SNMP_AUTH_PROTOCOL = _get("SNMP_AUTH_PROTOCOL", "SHA")   # MD5 | SHA | SHA224 | SHA256 | SHA384 | SHA512
-    SNMP_AUTH_PASSWORD = _get("SNMP_AUTH_PASSWORD", required=True)
+    SNMP_AUTH_PASSWORD = _get("SNMP_AUTH_PASSWORD", required=_snmp_required)
     SNMP_PRIV_PROTOCOL = _get("SNMP_PRIV_PROTOCOL", "AES128")  # DES | AES128 | AES192 | AES256
-    SNMP_PRIV_PASSWORD = _get("SNMP_PRIV_PASSWORD", required=True)
+    SNMP_PRIV_PASSWORD = _get("SNMP_PRIV_PASSWORD", required=_snmp_required)
     SNMP_CONTEXT_NAME = _get("SNMP_CONTEXT_NAME", "")
+
+    # --- Dummy traffic source tuning (only used when TRAFFIC_SOURCE=dummy) ---
+    DUMMY_RX_BASELINE_BYTES = _get_float("DUMMY_RX_BASELINE_BYTES", 200_000)
+    DUMMY_TX_BASELINE_BYTES = _get_float("DUMMY_TX_BASELINE_BYTES", 50_000)
+    DUMMY_SPIKE_CHANCE = _get_float("DUMMY_SPIKE_CHANCE", 0.08)  # probability per sample of a traffic burst
+    DUMMY_SPIKE_MAX_BYTES = _get_float("DUMMY_SPIKE_MAX_BYTES", 20_000_000)
 
     # --- Polling / rendering ---
     POLL_INTERVAL_SECONDS = _get_float("POLL_INTERVAL_SECONDS", 1.0)
