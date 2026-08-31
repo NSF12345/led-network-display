@@ -1,17 +1,17 @@
 """
 Pushes frames to a real WLED controller using its realtime UDP protocol
-(DRGB). Not wired in by default (WLED_ENABLED=false) — flip on once you
+(DRGB). Not wired in by default (WLED_ENABLED=false) - flip on once you
 have hardware, in parallel with or instead of the web output.
 
 DRGB packet format (WLED realtime UDP docs):
   byte 0:      protocol id, 2 = DRGB
-  byte 1:      timeout in seconds — if WLED doesn't receive another
+  byte 1:      timeout in seconds - if WLED doesn't receive another
                packet within this window, it reverts to its last preset.
                This is the fallback behavior described in the blog post:
                kill this process and the strip won't freeze/go dark.
   bytes 2..N:  3 bytes (R,G,B) per LED, in strip order.
 
-UDP is fire-and-forget — no ack, no retry. That's fine here: a dropped
+UDP is fire-and-forget - no ack, no retry. That's fine here: a dropped
 frame just gets superseded by the next one a fraction of a second later.
 """
 import asyncio
@@ -31,7 +31,7 @@ class WledOutput(OutputSink):
 
     async def start(self) -> None:
         loop = asyncio.get_running_loop()
-        # Connected UDP socket — just lets us use transport.sendto without
+        # Connected UDP socket - just lets us use transport.sendto without
         # re-specifying the address each call; UDP itself stays connectionless.
         self._transport, _ = await loop.create_datagram_endpoint(
             lambda: asyncio.DatagramProtocol(),

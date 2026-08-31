@@ -1,7 +1,7 @@
 services:
   led-network-poller:
     # Published by .github/workflows/docker-publish.yml on every push to
-    # main. This is a private package (repo is private) — the host running
+    # main. This is a private package (repo is private) - the host running
     # this compose file needs `docker login ghcr.io` first, with a PAT that
     # has the read:packages scope, or the pull will fail.
     image: ghcr.io/nsf12345/led-network-poller:latest
@@ -9,4 +9,4 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "8080:8080"  # web visualization — drop this once WLED output replaces it, or keep both
+      - "8080:8080"  # web visualization - drop this once WLED output replaces it, or keep both

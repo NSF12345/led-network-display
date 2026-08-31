@@ -5,7 +5,7 @@ a WebSocket as JSON: {"frame": [r, g, b, r, g, b, ...], "rx": bytes_per_sec,
 "tx": bytes_per_sec}.
 
 This is the stand-in output sink for testing the animation before real
-hardware exists — swap for WledOutput once you have a controller.
+hardware exists - swap for WledOutput once you have a controller.
 """
 import json
 import logging
@@ -24,7 +24,7 @@ class WebsocketOutput(OutputSink):
     def __init__(self, cfg):
         self.cfg = cfg
         # Set by main.py after a one-off SNMP lookup (switch_name, switch_port)
-        # — empty for dummy mode, or if the lookup failed.
+        # - empty for dummy mode, or if the lookup failed.
         self.device_info: dict = {}
         self._clients: set[web.WebSocketResponse] = set()
         self._app = web.Application()
@@ -44,6 +44,8 @@ class WebsocketOutput(OutputSink):
                 "host": self.cfg.SNMP_HOST,
                 "switch_name": self.device_info.get("switch_name") or self.cfg.SNMP_HOST,
                 "switch_port": self.device_info.get("switch_port") or f"ifIndex {self.cfg.SNMP_IF_INDEX}",
+                "sys_descr": self.device_info.get("sys_descr") or "",
+                "snmp_version": self.cfg.SNMP_VERSION,
             }
         else:
             info = {"source": "dummy"}

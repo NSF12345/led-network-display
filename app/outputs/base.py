@@ -11,7 +11,7 @@ class OutputSink(ABC):
     async def send_frame(self, frame: list[tuple[int, int, int]], rx_rate: float, tx_rate: float) -> None:
         """frame is a list of (r, g, b) 0-255 tuples, one per LED, in order.
         rx_rate/tx_rate are the current smoothed bytes/sec, for sinks that
-        want to display them (e.g. the web preview's legend) — sinks that
+        want to display them (e.g. the web preview's legend) - sinks that
         only care about pixels (e.g. WLED) can ignore them."""
         raise NotImplementedError
 
