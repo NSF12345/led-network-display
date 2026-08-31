@@ -28,8 +28,9 @@ jobs:
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
-          flavor: |
-            latest=auto
+          # :latest is intentionally NOT set here - it's only ever moved
+          # by promote.yml, run manually after checking out a release.
+          # See .github/workflows/README.md.
           tags: |
             type=ref,event=branch
             type=sha,format=short

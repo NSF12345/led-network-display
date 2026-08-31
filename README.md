@@ -189,14 +189,8 @@ All in `.env`, no code changes needed:
 
 ## CI / image publishing
 
-`.github/workflows/docker-publish.yml` builds and publishes the image to
-GHCR. Currently set to `workflow_dispatch` (manual trigger from the
-Actions tab) rather than running automatically on every push - flip it
-back to a `push`-on-`main` trigger once you're happy with the flow.
-Every run tags the image `sha-<short-commit>`, plus the branch name if
-it's not the default branch, plus `latest` only when it *is* the
-default branch - so a manual run from a feature branch can't
-accidentally clobber `latest`.
+See [`.github/workflows/README.md`](.github/workflows/README.md) for
+how the image gets built/published and how to cut a release.
 
 ## Moving to real hardware
 
