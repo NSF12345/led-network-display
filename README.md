@@ -1,8 +1,21 @@
 # LED Network Display — poller
 
-Polls a switch interface over SNMPv3, turns RX/TX byte rates into a
-moving-particle animation, and renders it. Two output sinks, either or
-both can be enabled:
+Turns network RX/TX byte rates into a moving-particle animation and
+renders it. Two interchangeable traffic sources, and two output sinks.
+
+## Traffic source (`TRAFFIC_SOURCE` in `.env`)
+
+- **`dummy` (default)** — generates synthetic RX/TX traffic (slow
+  wandering baseline + occasional random spikes). No SNMP target
+  needed, no `pysnmp` import at all. This is the one to build/deploy
+  with right now.
+- **`snmp`** — polls a real device over SNMPv3 (see "SNMP mode" below).
+  Requires all `SNMP_*` fields in `.env` and `pysnmp-lextudio` installed.
+
+Switching is just `.env` + restart — the renderer and output sinks
+don't know or care which source is feeding them.
+
+## Output sinks
 
 - **Web** — serves a browser page (canvas) showing the strip live over
   WebSocket. This is the one to use before you have hardware.
@@ -13,9 +26,9 @@ both can be enabled:
 Both can run simultaneously — useful for confirming the physical strip
 matches what the browser shows while tuning colors/speed.
 
-## Status / what's untested
+## SNMP mode — status / what's untested
 
-The SNMP client code (`app/snmp_poller.py`) is written against
+Only relevant once you switch `TRAFFIC_SOURCE=snmp`. The SNMP client code (`app/snmp_poller.py`) is written against
 `pysnmp-lextudio` 6.x's `pysnmp.hlapi.v3arch.asyncio` API but **has not
 been run against a live device** — no network access in the environment
 this was built in. Before relying on it:
@@ -38,11 +51,15 @@ dependencies and should work as-is.
 cp .env.example .env
 ```
 
-Edit `.env`:
+Default `.env` values run in dummy mode with the web preview enabled —
+no editing required to get something on screen. Worth adjusting anyway:
+- `LED_COUNT` — set to your actual strip length once known; safe to leave at default for now, since the web preview scales to whatever count you give it
+- `DUMMY_SPIKE_CHANCE` / `DUMMY_SPIKE_MAX_BYTES` — turn up if you want to see heavy-traffic visuals more often while testing
+
+When you're ready to point at a real device, set `TRAFFIC_SOURCE=snmp` and fill in:
 - `SNMP_HOST` / `SNMP_IF_INDEX` — your switch and the port you want reflected
 - `SNMP_USER` / `SNMP_AUTH_PASSWORD` / `SNMP_PRIV_PASSWORD` — your v3 credentials
 - `SNMP_AUTH_PROTOCOL` / `SNMP_PRIV_PROTOCOL` — must match what's configured on the switch (common: SHA + AES128)
-- `LED_COUNT` — set to your actual strip length once known; safe to leave at default for now, since the web preview scales to whatever count you give it
 
 ## Run
 
