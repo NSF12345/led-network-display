@@ -3,9 +3,15 @@ name: Create release tag
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to release, e.g. 0.1.0 (no 'v' prefix - added automatically)"
+      bump:
+        description: "Version bump"
         required: true
+        type: choice
+        options: [major, minor, bugfix, manual]
+        default: bugfix
+      version:
+        description: "Version if bump=manual, e.g. 0.1.0 (ignored otherwise)"
+        required: false
         type: string
 
 permissions:
@@ -22,18 +28,36 @@ jobs:
             exit 1
           fi
 
-      - name: Validate version format
-        run: |
-          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Version must be major.minor.patch (e.g. 0.1.0), got '${{ inputs.version }}'"
-            exit 1
-          fi
-
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full tag history to find the latest release
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [ "${{ inputs.bump }}" = "manual" ]; then
+            version="${{ inputs.version }}"
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Version must be major.minor.patch (e.g. 0.1.0), got '$version'"
+              exit 1
+            fi
+          else
+            latest=$(git tag -l 'v*.*.*' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            latest="${latest:-0.0.0}"
+            IFS='.' read -r major minor patch <<< "$latest"
+            case "${{ inputs.bump }}" in
+              major) major=$((major+1)); minor=0; patch=0 ;;
+              minor) minor=$((minor+1)); patch=0 ;;
+              bugfix) patch=$((patch+1)) ;;
+            esac
+            version="$major.$minor.$patch"
+          fi
+          echo "Latest tag found: ${latest:-none}, bump: ${{ inputs.bump }}, new version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          git tag "v${{ steps.ver.outputs.version }}"
+          git push origin "v${{ steps.ver.outputs.version }}"

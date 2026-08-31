@@ -13,10 +13,10 @@ Triggers:
 
 ## `release.yml` - cut a release
 
-Manual only, and only runs from `main` (fails immediately otherwise). Give it a version like `0.1.0`; it tags `v0.1.0` and pushes it, which then triggers `docker-publish.yml` to actually build and publish that release.
+Manual only, and only runs from `main` (fails immediately otherwise). Pick a bump type - `major`/`minor`/`bugfix` auto-increments off the latest existing tag, or `manual` to type an exact version. Tags `vX.Y.Z` and pushes it, which triggers `docker-publish.yml` to build and publish that release.
 
 ## Doing a release
 
 1. Merge your changes into `main`
-2. Actions tab -> **Create release tag** -> run workflow, enter version (e.g. `0.1.0`)
+2. Actions tab -> **Create release tag** -> run workflow, pick a bump (or `manual` + a version)
 3. That pushes the tag, which kicks off **Build and publish Docker image** automatically
