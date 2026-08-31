@@ -3,9 +3,9 @@
 ## `docker-publish.yml` - build & publish the image
 
 Triggers:
-- Push to `main` (untagged) -> `:main`, `:sha-<short>`
+- Push to `main` (untagged) -> `:sha-<short>` only - no floating `:main` tag, deliberately (nothing should track an untested branch HEAD automatically)
 - Push a `v*.*.*` tag -> `:X.Y.Z`, `:X.Y`, `:sha-<short>`
-- Manual run on any branch -> `:<branch-name>`, `:sha-<short>`
+- Manual run on any other branch -> `:<branch-name>`, `:sha-<short>`
 
 `:latest` is never touched here - it's only ever moved by `promote.yml`, run manually. Tagging a release publishes it under its version, nothing more; it doesn't go "live" as `:latest` until you deliberately promote it.
 

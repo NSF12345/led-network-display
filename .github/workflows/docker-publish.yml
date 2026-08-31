@@ -39,7 +39,7 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=ref,event=branch
+            type=ref,event=branch,enable=${{ github.ref_name != 'main' }}
             type=sha,format=short
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
