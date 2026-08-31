@@ -19,6 +19,10 @@ Manual only, and only runs from `main` (fails immediately otherwise). Pick a bum
 
 Manual only. Give it a version (e.g. `0.1.0`) already published by `docker-publish.yml`; it re-tags that exact image as `:latest` directly via the registry (no rebuild). This is the deliberate "approve and ship" step - nothing reaches `:latest` without someone explicitly running this after checking the release out.
 
+## `cleanup-packages.yml` - trim old untagged versions
+
+Runs weekly (also manual, defaulting to a dry run) and deletes untagged package versions older than 30 days - the many superseded builds that pile up over time as CI runs. Tagged versions (releases, `:latest`, `:main`, branch names) are never touched by this regardless of age.
+
 ## Doing a release
 
 1. Merge your changes into `main`
