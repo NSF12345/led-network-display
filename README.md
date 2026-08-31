@@ -71,6 +71,16 @@ are in the interface list. Find it by walking `ifDescr`/`ifName`
 (`1.3.6.1.2.1.2.2.1.2` / `1.3.6.1.2.1.31.1.1.1.1`) against the device
 and matching the description to your physical port.
 
+This isn't limited to physical switch ports - any interface the device
+exposes over SNMP works. On an access point, for example, you could
+point `SNMP_IF_INDEX` at a per-SSID interface (something like
+`wifi0ap0` in `ifName`) instead of the wired uplink, to visualize just
+that SSID's aggregate traffic rather than the AP's overall link. No
+code changes needed - purely a config choice, found the same way (walk
+`ifDescr`/`ifName`). Note this is still per-SSID, not per-client -
+IF-MIB has no concept of a single connected device's individual
+traffic.
+
 The client (`app/snmp_poller.py`) addresses counters
 (`ifHCInOctets`/`ifHCOutOctets`) by raw numeric OID rather than symbolic
 MIB name - `pysnmp-lextudio` doesn't bundle the IF-MIB module, so
