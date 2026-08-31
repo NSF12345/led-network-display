@@ -61,6 +61,7 @@ async def render_loop(renderer: ParticleRenderer, sinks: list, last_sample_time:
 
 
 async def main():
+    log.info("led-network-poller %s", config.APP_VERSION)
     renderer = ParticleRenderer(config)
     poller = build_traffic_source()
 
