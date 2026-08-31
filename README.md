@@ -102,11 +102,21 @@ depends entirely on how that device's own SNMP agent formats
 device info") rather than a blank tooltip in that case, so it reads as
 intentional rather than broken.
 
-Also tried (as expected, no response under any version - not
-Network-app-managed devices): two UniFi Protect cameras on the same
-network. Everything in this table follows standard SNMP/IF-MIB and
+Everything in this table follows standard SNMP/IF-MIB and
 should work the same way on other vendors' hardware, but that hasn't
 been verified - a PR extending this table to other vendors is welcome.
+If you're using an AI agent to test a new device, point it to
+[`agent-testing.md`](agent-testing.md).
+
+### Testing a new device
+
+The process used to validate everything in the table above, for next time:
+
+1. **Confirm reachability/auth first**, cheaply - a plain `sysName`/`sysDescr` GET (`1.3.6.1.2.1.1.5.0` / `1.3.6.1.2.1.1.1.0`) before worrying about traffic counters at all. SNMP doesn't distinguish "wrong credentials" from "wrong IP" - both just time out - so get this working before debugging anything else.
+2. **Find the real `ifIndex` - don't assume 1.** Walk `ifDescr`/`ifName` (`1.3.6.1.2.1.2.2.1.2` / `1.3.6.1.2.1.31.1.1.1.1`) and match the description to the physical port/interface you actually want. Watch for `lo` (loopback) sitting at index 1 on anything Linux-based (gateways, APs) - a dead giveaway if you skip this: RX and TX come back as the *exact same number*, which is essentially impossible for real traffic but exactly what loopback always does.
+3. **Verify it's real traffic, not a fluke.** A single counter read tells you nothing - pull it twice a couple of seconds apart and confirm the value actually increased. A single `0` delta isn't necessarily broken (genuine idle moment), but if you can, sample several times to rule that out before concluding either way.
+4. **Run it through the actual app, not just raw queries.** Point `.env` at the device, start the app for real, and check `/api/info` plus the web preview - confirms the full pipeline (config validation, `SnmpPoller`, the renderer, the web layer) works together, not just that the raw SNMP mechanics are sound in isolation.
+5. **Add a row to the table above** with what you found - vendor, hardware, firmware, which versions actually worked, and anything device-specific worth flagging (tooltip behavior, `ifIndex` quirks, etc.).
 
 ## Setup
 
