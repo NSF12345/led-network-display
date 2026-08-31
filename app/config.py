@@ -27,6 +27,13 @@ def _get_float(name: str, default: float) -> float:
 
 
 class Config:
+    # Set at Docker build time from the actual commit (see Dockerfile /
+    # .github/workflows/docker-publish.yml), not bumped by hand. Shown in
+    # the web preview's footer and /api/info, purely informational -
+    # nothing branches on this value. "dev" outside of a CI-built image
+    # (e.g. running locally via `python -m app.main`).
+    APP_VERSION = _get("APP_VERSION", "dev")
+
     # DEBUG | INFO | WARNING | ERROR | CRITICAL
     LOG_LEVEL = _get("LOG_LEVEL", "INFO").upper()
 

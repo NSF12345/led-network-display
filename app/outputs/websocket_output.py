@@ -49,6 +49,7 @@ class WebsocketOutput(OutputSink):
             }
         else:
             info = {"source": "dummy"}
+        info["app_version"] = self.cfg.APP_VERSION
         return web.json_response(info)
 
     async def _handle_ws(self, request):
