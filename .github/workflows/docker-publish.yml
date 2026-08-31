@@ -28,9 +28,16 @@ jobs:
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
-          # :latest is intentionally NOT set here - it's only ever moved
-          # by promote.yml, run manually after checking out a release.
-          # See .github/workflows/README.md.
+          # docker/metadata-action defaults to flavor "latest=auto" even
+          # with no flavor: block declared at all - simply omitting it
+          # (as this workflow used to) does NOT disable that default, it
+          # was silently still tagging :latest on every semver release
+          # despite this file having no explicit "latest" rule. Has to be
+          # set to false explicitly. :latest is only ever meant to move
+          # via promote.yml, run manually after checking out a release -
+          # see .github/workflows/README.md.
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=branch
             type=sha,format=short
