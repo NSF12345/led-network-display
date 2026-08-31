@@ -1,0 +1,39 @@
+name: Promote a release to latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to promote to :latest, e.g. 0.1.0 (must already be published by docker-publish.yml)"
+        required: true
+        type: string
+
+permissions:
+  packages: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must be major.minor.patch (e.g. 0.1.0), got '${{ inputs.version }}'"
+            exit 1
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Point :latest at the given version
+        # Re-tags the already-published image manifest directly via the
+        # registry API - no rebuild, no pulling image content.
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/${{ github.repository }}:latest \
+            ghcr.io/${{ github.repository }}:${{ inputs.version }}

@@ -1,7 +1,7 @@
 """
 Entrypoint. Runs three concurrent loops:
-  1. SNMP poller — updates the renderer's current RX/TX rates once per POLL_INTERVAL_SECONDS
-  2. Render loop — steps the particle simulation and pushes frames to every
+  1. SNMP poller - updates the renderer's current RX/TX rates once per POLL_INTERVAL_SECONDS
+  2. Render loop - steps the particle simulation and pushes frames to every
      enabled output sink at RENDER_FPS
   3. Each output sink's own server (currently just the web sink's HTTP server)
 """
@@ -13,12 +13,12 @@ from .config import config
 from .outputs import WebsocketOutput, WledOutput
 from .renderer import ParticleRenderer
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(level=config.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
 
 
 def build_traffic_source():
-    """Import pysnmp only if actually needed — dummy mode should never
+    """Import pysnmp only if actually needed - dummy mode should never
     require it to be installed correctly."""
     if config.TRAFFIC_SOURCE == "snmp":
         from .snmp_poller import SnmpPoller
@@ -40,11 +40,11 @@ async def render_loop(renderer: ParticleRenderer, sinks: list, last_sample_time:
         last = now
 
         if now - last_sample_time[0] > config.STALE_DATA_TIMEOUT_SECONDS:
-            # No fresh traffic sample recently (e.g. SNMP target unreachable) —
+            # No fresh traffic sample recently (e.g. SNMP target unreachable) -
             # decay to idle instead of looping the last-known rates forever.
             renderer.update_rates(0.0, 0.0)
             if not stale_logged:
-                log.warning("No traffic sample in over %.0fs — fading to idle", config.STALE_DATA_TIMEOUT_SECONDS)
+                log.warning("No traffic sample in over %.0fs - fading to idle", config.STALE_DATA_TIMEOUT_SECONDS)
                 stale_logged = True
         else:
             stale_logged = False
@@ -61,6 +61,7 @@ async def render_loop(renderer: ParticleRenderer, sinks: list, last_sample_time:
 
 
 async def main():
+    log.info("led-network-poller %s", config.APP_VERSION)
     renderer = ParticleRenderer(config)
     poller = build_traffic_source()
 
@@ -73,7 +74,7 @@ async def main():
         sinks.append(WledOutput(config))
 
     if not sinks:
-        log.warning("No output sinks enabled (WEB_ENABLED and WLED_ENABLED both false) — nothing will be visible")
+        log.warning("No output sinks enabled (WEB_ENABLED and WLED_ENABLED both false) - nothing will be visible")
 
     if web_sink is not None and config.TRAFFIC_SOURCE == "snmp":
         # Best-effort, one-off lookup so the web preview can show which
@@ -86,7 +87,9 @@ async def main():
     last_sample_time = [time.monotonic()]
 
     def on_sample(rates):
-        log.info("RX %.0f B/s  TX %.0f B/s", rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
+        # DEBUG, not INFO - this fires once per POLL_INTERVAL_SECONDS
+        # forever, and the web preview already shows live rates in the UI.
+        log.debug("RX %.0f B/s  TX %.0f B/s", rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
         renderer.update_rates(rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
         last_sample_time[0] = time.monotonic()
 

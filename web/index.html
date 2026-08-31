@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>LED Network Display — Preview</title>
+<title>LED Network Display - Preview</title>
 <style>
   :root { color-scheme: dark; }
   body {
@@ -35,17 +35,19 @@
   }
   #source-banner.dummy { color: #d29922; background: rgba(210, 153, 34, 0.12); border-color: rgba(210, 153, 34, 0.4); }
   #source-banner.snmp { color: #f85149; background: rgba(248, 81, 73, 0.12); border-color: rgba(248, 81, 73, 0.4); }
+  #version { font-size: 0.7rem; color: #4d5560; }
 </style>
 </head>
 <body>
-  <h1>LED Network Display — Live Preview</h1>
+  <h1>LED Network Display - Live Preview</h1>
   <div id="source-banner">checking data source…</div>
   <canvas id="strip" width="1200" height="80"></canvas>
   <div class="legend">
-    <span><span class="dot" style="background:#00ffff"></span>RX <span id="rx-rate">—</span></span>
-    <span><span class="dot" style="background:#00ff00"></span>TX <span id="tx-rate">—</span></span>
+    <span><span class="dot" style="background:#00ffff"></span>RX <span id="rx-rate">-</span></span>
+    <span><span class="dot" style="background:#00ff00"></span>TX <span id="tx-rate">-</span></span>
   </div>
   <div id="status" class="disconnected">connecting…</div>
+  <div id="version"></div>
 
 <script>
 const canvas = document.getElementById('strip');
@@ -54,6 +56,7 @@ const statusEl = document.getElementById('status');
 const sourceBanner = document.getElementById('source-banner');
 const rxRateEl = document.getElementById('rx-rate');
 const txRateEl = document.getElementById('tx-rate');
+const versionEl = document.getElementById('version');
 
 function formatRate(bytesPerSec) {
   const bits = bytesPerSec * 8;
@@ -63,13 +66,30 @@ function formatRate(bytesPerSec) {
 }
 
 function formatPortLabel(switchPort) {
-  // ifName is "<slot>/<port>" (switch's own naming, e.g. "0/1"). Slot 0 is
-  // the common unstacked case — just show "Port N" — but a non-zero slot
-  // (stacking, module bays) matters, so keep it visible in that case.
-  const m = /^(\d+)\/(\d+)$/.exec(switchPort);
-  if (!m) return switchPort;
-  const [, slot, port] = m;
-  return slot === '0' ? `Port ${port}` : `Slot ${slot}, Port ${port}`;
+  // ifName content is entirely vendor-defined free text (SNMP doesn't
+  // standardize its format) - this only recognizes a couple of common
+  // shapes and otherwise falls back to showing whatever the switch sent,
+  // rather than assuming any particular vendor's convention.
+  const slotPort = /^(\d+)\/(\d+)$/.exec(switchPort);
+  if (slotPort) {
+    const [, slot, port] = slotPort;
+    return slot === '0' ? `Port ${port}` : `Slot ${slot}, Port ${port}`;
+  }
+  const bareNumber = /^(\d+)$/.exec(switchPort);
+  if (bareNumber) return `Port ${bareNumber[1]}`;
+  return switchPort;
+}
+
+function formatSysDescr(sysDescr) {
+  // sysDescr content/format is entirely vendor-defined and often includes
+  // a kernel build string (e.g. "..., Linux 3.6.5" or an agent whose
+  // whole sysDescr IS just a kernel string) - that's implementation
+  // trivia, not useful device info, so strip it off generically rather
+  // than assuming any one vendor's exact format.
+  const stripped = (sysDescr || '').replace(/,?\s*\bLinux\b.*$/i, '').trim();
+  // An empty tooltip is indistinguishable from a broken one - say so
+  // explicitly rather than leaving it blank.
+  return stripped || '(no additional device info)';
 }
 
 async function loadSourceInfo() {
@@ -77,28 +97,34 @@ async function loadSourceInfo() {
     const res = await fetch('/api/info');
     const info = await res.json();
     if (info.source === 'snmp') {
-      sourceBanner.textContent = `LIVE DATA — ${info.switch_name} on ${info.host}, ${formatPortLabel(info.switch_port)}`;
+      sourceBanner.textContent = `LIVE DATA - ${info.switch_name} on ${info.host}, ${formatPortLabel(info.switch_port)}`;
       sourceBanner.className = 'snmp';
+      sourceBanner.title = `${formatSysDescr(info.sys_descr)} (SNMP${info.snmp_version})`;
     } else {
-      sourceBanner.textContent = 'DUMMY DATA — simulated traffic, not a real device';
+      sourceBanner.textContent = 'DUMMY DATA - simulated traffic, not a real device';
       sourceBanner.className = 'dummy';
+      sourceBanner.title = '';
     }
+    versionEl.textContent = info.app_version || '';
   } catch (e) {
     sourceBanner.textContent = 'data source unknown (could not reach /api/info)';
   }
 }
-loadSourceInfo();
-
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${proto}//${location.host}/ws`);
 
   ws.onopen = () => {
+    // Re-fetch on every (re)connect, not just once at page load - the
+    // backend may have restarted with different config since we last
+    // connected (e.g. dummy -> snmp), and the WebSocket reconnecting is
+    // exactly the signal that's worth checking against.
+    loadSourceInfo();
     statusEl.textContent = 'connected';
     statusEl.className = 'connected';
   };
   ws.onclose = () => {
-    statusEl.textContent = 'disconnected — retrying…';
+    statusEl.textContent = 'disconnected - retrying…';
     statusEl.className = 'disconnected';
     setTimeout(connect, 1000);
   };

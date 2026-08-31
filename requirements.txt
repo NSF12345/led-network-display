@@ -2,7 +2,7 @@ aiohttp==3.10.11
 
 # Only required when TRAFFIC_SOURCE=snmp (default is "dummy", which doesn't
 # import this at all). pysnmp-lextudio is a maintained fork of pysnmp
-# (original project is unmaintained) — note it's since been folded back
+# (original project is unmaintained) - note it's since been folded back
 # into the upstream "pysnmp" name and prints a deprecation warning, but
 # 6.3.0 is confirmed installable and working (6.1.4 never existed on PyPI).
 # Verified API shape: pysnmp.hlapi.asyncio (not hlapi.v3arch.asyncio).

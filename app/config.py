@@ -1,7 +1,7 @@
 """
 Central config, loaded from environment variables (see .env.example).
 Fails loudly on startup if required SNMP fields for the selected
-SNMP_VERSION are missing — better than silently polling with broken auth.
+SNMP_VERSION are missing - better than silently polling with broken auth.
 """
 import os
 
@@ -27,10 +27,20 @@ def _get_float(name: str, default: float) -> float:
 
 
 class Config:
+    # Set at Docker build time from the actual commit (see Dockerfile /
+    # .github/workflows/docker-publish.yml), not bumped by hand. Shown in
+    # the web preview's footer and /api/info, purely informational -
+    # nothing branches on this value. "dev" outside of a CI-built image
+    # (e.g. running locally via `python -m app.main`).
+    APP_VERSION = _get("APP_VERSION", "dev")
+
+    # DEBUG | INFO | WARNING | ERROR | CRITICAL
+    LOG_LEVEL = _get("LOG_LEVEL", "INFO").upper()
+
     # --- Traffic source ---
-    # "dummy" generates synthetic RX/TX traffic — no SNMP target needed, for
+    # "dummy" generates synthetic RX/TX traffic - no SNMP target needed, for
     # building/testing the pipeline before a real device is wired up.
-    # "snmp" polls a real device (see SnmpPoller) — requires the SNMP_* fields below.
+    # "snmp" polls a real device (see SnmpPoller) - requires the SNMP_* fields below.
     TRAFFIC_SOURCE = _get("TRAFFIC_SOURCE", "dummy").lower()
 
     # --- SNMP target (only required when TRAFFIC_SOURCE=snmp) ---
@@ -39,10 +49,11 @@ class Config:
     SNMP_PORT = _get_int("SNMP_PORT", 161)
     SNMP_IF_INDEX = _get_int("SNMP_IF_INDEX", required=_snmp_required)  # ifIndex of the port to monitor
 
-    # "v1"/"v2c" = community-string auth, no encryption — easier to enable
-    # (e.g. UniFi's built-in controller SNMP toggle only offers these), but
-    # sends the community string in the clear. "v3" = USM auth+privacy (the
-    # original target) — more setup (SSH into the switch), more secure.
+    # "v1"/"v2c" = community-string auth, no encryption - simpler to set up,
+    # but sends the community string in the clear. v1 uses the older 32-bit
+    # counters (ifInOctets/ifOutOctets) instead of the 64-bit ones, since
+    # its PDU encoding can't carry Counter64 - see snmp_poller.py. "v3" =
+    # USM auth+privacy, more setup but properly authenticated and encrypted.
     SNMP_VERSION = _get("SNMP_VERSION", "v3").lower()
     if SNMP_VERSION not in ("v1", "v2c", "v3"):
         raise RuntimeError(f"Invalid SNMP_VERSION: {SNMP_VERSION!r} (expected 'v1', 'v2c', or 'v3')")

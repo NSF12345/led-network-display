@@ -6,7 +6,7 @@ the renderer or output sinks.
 
 Traffic shape: a slowly wandering baseline (so it doesn't look perfectly
 flat) plus occasional random bursts, independently for RX and TX. Not
-meant to be realistic — just varied enough to exercise the full range
+meant to be realistic - just varied enough to exercise the full range
 of the particle renderer (idle, moderate, heavy) while building/testing.
 """
 import asyncio

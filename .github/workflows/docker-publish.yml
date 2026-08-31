@@ -2,8 +2,9 @@ name: Build and publish Docker image
 
 on:
   workflow_dispatch:
-  # push:
-  #   branches: [main]
+  push:
+    branches: [main]
+    tags: ['v*.*.*']  # e.g. v1.2.3 - triggers the semver-tagged release path below
 
 permissions:
   contents: read
@@ -27,9 +28,25 @@ jobs:
         id: meta
         with:
           images: ghcr.io/${{ github.repository }}
+          # :latest is intentionally NOT set here - it's only ever moved
+          # by promote.yml, run manually after checking out a release.
+          # See .github/workflows/README.md.
           tags: |
-            type=raw,value=latest
+            type=ref,event=branch
             type=sha,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - id: version
+        # major.minor.bugfix release tags (v1.2.3) win when that's what
+        # triggered this build; anything else (branch push, manual
+        # workflow_dispatch) falls back to the commit's short SHA.
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: docker/build-push-action@v6
         with:
@@ -37,5 +54,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
