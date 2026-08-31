@@ -87,13 +87,16 @@ async function loadSourceInfo() {
     sourceBanner.textContent = 'data source unknown (could not reach /api/info)';
   }
 }
-loadSourceInfo();
-
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${proto}//${location.host}/ws`);
 
   ws.onopen = () => {
+    // Re-fetch on every (re)connect, not just once at page load — the
+    // backend may have restarted with different config since we last
+    // connected (e.g. dummy -> snmp), and the WebSocket reconnecting is
+    // exactly the signal that's worth checking against.
+    loadSourceInfo();
     statusEl.textContent = 'connected';
     statusEl.className = 'connected';
   };
