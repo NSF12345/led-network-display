@@ -16,9 +16,8 @@ Verified against pysnmp-lextudio 6.3.0 (6.1.4 from early planning doesn't
 exist on PyPI): the installed API is pysnmp.hlapi.asyncio (not
 hlapi.v3arch.asyncio), the fetch function is getCmd (not get_cmd), and
 UdpTransportTarget is a plain sync constructor (not an async .create()).
-Confirmed end-to-end against an unreachable test address (192.0.2.1) -
-request builds and sends correctly, times out as expected. Not yet
-confirmed against a real device's actual SNMPv3 credentials.
+Confirmed end-to-end (real traffic counters, all three SNMP versions)
+against real hardware - see README's "Known working devices" table.
 """
 import asyncio
 import logging

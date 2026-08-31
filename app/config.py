@@ -27,6 +27,9 @@ def _get_float(name: str, default: float) -> float:
 
 
 class Config:
+    # DEBUG | INFO | WARNING | ERROR | CRITICAL
+    LOG_LEVEL = _get("LOG_LEVEL", "INFO").upper()
+
     # --- Traffic source ---
     # "dummy" generates synthetic RX/TX traffic - no SNMP target needed, for
     # building/testing the pipeline before a real device is wired up.

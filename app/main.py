@@ -13,7 +13,7 @@ from .config import config
 from .outputs import WebsocketOutput, WledOutput
 from .renderer import ParticleRenderer
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(level=config.LOG_LEVEL, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
 
 
@@ -86,7 +86,9 @@ async def main():
     last_sample_time = [time.monotonic()]
 
     def on_sample(rates):
-        log.info("RX %.0f B/s  TX %.0f B/s", rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
+        # DEBUG, not INFO - this fires once per POLL_INTERVAL_SECONDS
+        # forever, and the web preview already shows live rates in the UI.
+        log.debug("RX %.0f B/s  TX %.0f B/s", rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
         renderer.update_rates(rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
         last_sample_time[0] = time.monotonic()
 
