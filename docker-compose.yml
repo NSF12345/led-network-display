@@ -1,0 +1,8 @@
+services:
+  led-network-poller:
+    build: .
+    container_name: led-network-poller
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"  # web visualization — drop this once WLED output replaces it, or keep both

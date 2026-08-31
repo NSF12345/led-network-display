@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>LED Network Display — Preview</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: #0b0d10;
+    color: #d8dee4;
+    font-family: -apple-system, Segoe UI, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 1.5rem;
+  }
+  h1 { font-size: 1rem; font-weight: 500; color: #8b949e; letter-spacing: 0.05em; text-transform: uppercase; }
+  #status { font-size: 0.85rem; color: #8b949e; }
+  #status.connected { color: #3fb950; }
+  #status.disconnected { color: #f85149; }
+  canvas { background: #05060a; border-radius: 8px; border: 1px solid #21262d; }
+  .legend { display: flex; gap: 1.5rem; font-size: 0.85rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+  <h1>LED Network Display — Live Preview</h1>
+  <canvas id="strip" width="1200" height="80"></canvas>
+  <div class="legend">
+    <span><span class="dot" style="background:#00ffff"></span>RX</span>
+    <span><span class="dot" style="background:#00ff00"></span>TX</span>
+  </div>
+  <div id="status" class="disconnected">connecting…</div>
+
+<script>
+const canvas = document.getElementById('strip');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+  ws.onopen = () => {
+    statusEl.textContent = 'connected';
+    statusEl.className = 'connected';
+  };
+  ws.onclose = () => {
+    statusEl.textContent = 'disconnected — retrying…';
+    statusEl.className = 'disconnected';
+    setTimeout(connect, 1000);
+  };
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = (event) => {
+    const flat = JSON.parse(event.data);
+    const ledCount = flat.length / 3;
+    drawFrame(flat, ledCount);
+  };
+}
+
+function drawFrame(flat, ledCount) {
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+  const spacing = w / ledCount;
+  const radius = Math.min(spacing * 0.4, h * 0.3);
+  const cy = h / 2;
+
+  for (let i = 0; i < ledCount; i++) {
+    const r = flat[i * 3], g = flat[i * 3 + 1], b = flat[i * 3 + 2];
+    const cx = spacing * (i + 0.5);
+
+    // subtle glow for lit pixels
+    if (r + g + b > 10) {
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius * 3);
+      grad.addColorStop(0, `rgba(${r},${g},${b},0.5)`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fill();
+  }
+}
+
+connect();
+</script>
+</body>
+</html>
