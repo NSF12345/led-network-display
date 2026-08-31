@@ -18,6 +18,7 @@ class Particle:
     direction: int    # +1 or -1
     brightness: float  # 0.0-1.0
     trail: float        # trail length in pixels
+    speed: float         # pixels per second, jittered per-particle
 
 
 def _rate_to_intensity(rate_bytes_per_sec: float, min_bytes: float, max_bytes: float) -> float:
@@ -45,49 +46,66 @@ class ParticleRenderer:
         self._spawn_accumulator_rx = 0.0
         self._spawn_accumulator_tx = 0.0
 
+    @property
+    def rx_rate(self) -> float:
+        return self._rx_rate
+
+    @property
+    def tx_rate(self) -> float:
+        return self._tx_rate
+
     def update_rates(self, rx_bytes_per_sec: float, tx_bytes_per_sec: float):
         self._rx_rate = rx_bytes_per_sec
         self._tx_rate = tx_bytes_per_sec
 
-    def _maybe_spawn(self, particles: list[Particle], rate: float, direction: int, dt: float, accumulator_attr: str):
+    def _maybe_spawn(self, particles: list[Particle], rate: float, direction: int, dt: float,
+                      accumulator_attr: str, base_speed: float):
         intensity = _rate_to_intensity(rate, self.cfg.RATE_SCALE_MIN_BYTES, self.cfg.RATE_SCALE_MAX_BYTES)
         if intensity <= 0.0:
             return
         # Spawn rate scales with intensity: up to ~15 particles/sec at max traffic.
         spawns_per_sec = intensity * 15.0
         acc = getattr(self, accumulator_attr) + spawns_per_sec * dt
+        max_particles = self.cfg.PARTICLE_MAX_PER_DIRECTION
+        jitter = self.cfg.PARTICLE_SPEED_JITTER
         while acc >= 1.0:
+            acc -= 1.0
+            if len(particles) >= max_particles:
+                continue
             start_pos = 0.0 if direction == 1 else float(self.led_count - 1)
             brightness = 0.5 + 0.5 * intensity  # heavier traffic -> brighter
             trail = self.cfg.PARTICLE_TRAIL_LENGTH * (1.0 + intensity)  # and longer trail
-            particles.append(Particle(position=start_pos, direction=direction, brightness=brightness, trail=trail))
-            acc -= 1.0
+            speed = base_speed * (1.0 - jitter + random.random() * 2 * jitter)
+            particles.append(Particle(position=start_pos, direction=direction, brightness=brightness,
+                                       trail=trail, speed=speed))
         setattr(self, accumulator_attr, acc)
 
     def step(self, dt: float) -> list[tuple[int, int, int]]:
         """Advance the simulation by dt seconds and return the rendered frame."""
-        self._maybe_spawn(self._rx_particles, self._rx_rate, +1, dt, "_spawn_accumulator_rx")
-        self._maybe_spawn(self._tx_particles, self._tx_rate, -1, dt, "_spawn_accumulator_tx")
+        self._maybe_spawn(self._rx_particles, self._rx_rate, +1, dt, "_spawn_accumulator_rx",
+                           self.cfg.RX_PARTICLE_SPEED_PIXELS_PER_SEC)
+        self._maybe_spawn(self._tx_particles, self._tx_rate, -1, dt, "_spawn_accumulator_tx",
+                           self.cfg.TX_PARTICLE_SPEED_PIXELS_PER_SEC)
 
-        speed = self.cfg.PARTICLE_SPEED_PIXELS_PER_SEC
         for p in self._rx_particles:
-            p.position += p.direction * speed * dt
+            p.position += p.direction * p.speed * dt
         for p in self._tx_particles:
-            p.position += p.direction * speed * dt
+            p.position += p.direction * p.speed * dt
 
         self._rx_particles = [p for p in self._rx_particles if -p.trail <= p.position <= self.led_count - 1 + p.trail]
         self._tx_particles = [p for p in self._tx_particles if -p.trail <= p.position <= self.led_count - 1 + p.trail]
 
         frame = [[0.0, 0.0, 0.0] for _ in range(self.led_count)]
-        self._paint(frame, self._rx_particles, self.cfg.RX_COLOR)
-        self._paint(frame, self._tx_particles, self.cfg.TX_COLOR)
+        self._paint(frame, self._rx_particles, self.cfg.RX_COLOR, self.cfg.RX_HIGHLIGHT_COLOR)
+        self._paint(frame, self._tx_particles, self.cfg.TX_COLOR, self.cfg.TX_HIGHLIGHT_COLOR)
 
         return [
             (min(255, int(r)), min(255, int(g)), min(255, int(b)))
             for r, g, b in frame
         ]
 
-    def _paint(self, frame, particles: list[Particle], color: tuple[int, int, int]):
+    def _paint(self, frame, particles: list[Particle], color: tuple[int, int, int],
+               highlight_color: tuple[int, int, int]):
         for p in particles:
             # Fractional-pixel interpolation: light the two nearest LEDs
             # in proportion to how close the particle is to each, then
@@ -103,8 +121,14 @@ class ParticleRenderer:
                 idx_high = idx_low + 1
                 frac = pos - idx_low
                 b = p.brightness * fade
+                # Blend from the bright highlight color at the head toward
+                # the base color along the trail.
+                blend = fade
+                r_c = highlight_color[0] * blend + color[0] * (1 - blend)
+                g_c = highlight_color[1] * blend + color[1] * (1 - blend)
+                b_c = highlight_color[2] * blend + color[2] * (1 - blend)
                 for idx, weight in ((idx_low, 1 - frac), (idx_high, frac)):
                     if 0 <= idx < self.led_count and weight > 0:
-                        frame[idx][0] += color[0] * b * weight
-                        frame[idx][1] += color[1] * b * weight
-                        frame[idx][2] += color[2] * b * weight
+                        frame[idx][0] += r_c * b * weight
+                        frame[idx][1] += g_c * b * weight
+                        frame[idx][2] += b_c * b * weight

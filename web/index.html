@@ -25,14 +25,25 @@
   .legend { display: flex; gap: 1.5rem; font-size: 0.85rem; }
   .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  #source-banner {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+  }
+  #source-banner.dummy { color: #d29922; background: rgba(210, 153, 34, 0.12); border-color: rgba(210, 153, 34, 0.4); }
+  #source-banner.snmp { color: #f85149; background: rgba(248, 81, 73, 0.12); border-color: rgba(248, 81, 73, 0.4); }
 </style>
 </head>
 <body>
   <h1>LED Network Display — Live Preview</h1>
+  <div id="source-banner">checking data source…</div>
   <canvas id="strip" width="1200" height="80"></canvas>
   <div class="legend">
-    <span><span class="dot" style="background:#00ffff"></span>RX</span>
-    <span><span class="dot" style="background:#00ff00"></span>TX</span>
+    <span><span class="dot" style="background:#00ffff"></span>RX <span id="rx-rate">—</span></span>
+    <span><span class="dot" style="background:#00ff00"></span>TX <span id="tx-rate">—</span></span>
   </div>
   <div id="status" class="disconnected">connecting…</div>
 
@@ -40,6 +51,43 @@
 const canvas = document.getElementById('strip');
 const ctx = canvas.getContext('2d');
 const statusEl = document.getElementById('status');
+const sourceBanner = document.getElementById('source-banner');
+const rxRateEl = document.getElementById('rx-rate');
+const txRateEl = document.getElementById('tx-rate');
+
+function formatRate(bytesPerSec) {
+  const bits = bytesPerSec * 8;
+  if (bits >= 1_000_000) return `${(bits / 1_000_000).toFixed(1)} Mbps`;
+  if (bits >= 1_000) return `${(bits / 1_000).toFixed(1)} Kbps`;
+  return `${bits.toFixed(0)} bps`;
+}
+
+function formatPortLabel(switchPort) {
+  // ifName is "<slot>/<port>" (switch's own naming, e.g. "0/1"). Slot 0 is
+  // the common unstacked case — just show "Port N" — but a non-zero slot
+  // (stacking, module bays) matters, so keep it visible in that case.
+  const m = /^(\d+)\/(\d+)$/.exec(switchPort);
+  if (!m) return switchPort;
+  const [, slot, port] = m;
+  return slot === '0' ? `Port ${port}` : `Slot ${slot}, Port ${port}`;
+}
+
+async function loadSourceInfo() {
+  try {
+    const res = await fetch('/api/info');
+    const info = await res.json();
+    if (info.source === 'snmp') {
+      sourceBanner.textContent = `LIVE DATA — ${info.switch_name} on ${info.host}, ${formatPortLabel(info.switch_port)}`;
+      sourceBanner.className = 'snmp';
+    } else {
+      sourceBanner.textContent = 'DUMMY DATA — simulated traffic, not a real device';
+      sourceBanner.className = 'dummy';
+    }
+  } catch (e) {
+    sourceBanner.textContent = 'data source unknown (could not reach /api/info)';
+  }
+}
+loadSourceInfo();
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -57,9 +105,11 @@ function connect() {
   ws.onerror = () => ws.close();
 
   ws.onmessage = (event) => {
-    const flat = JSON.parse(event.data);
-    const ledCount = flat.length / 3;
-    drawFrame(flat, ledCount);
+    const msg = JSON.parse(event.data);
+    const ledCount = msg.frame.length / 3;
+    drawFrame(msg.frame, ledCount);
+    rxRateEl.textContent = formatRate(msg.rx);
+    txRateEl.textContent = formatRate(msg.tx);
   };
 }
 

@@ -43,7 +43,7 @@ class WledOutput(OutputSink):
         if self._transport:
             self._transport.close()
 
-    async def send_frame(self, frame: list[tuple[int, int, int]]) -> None:
+    async def send_frame(self, frame: list[tuple[int, int, int]], rx_rate: float, tx_rate: float) -> None:
         if not self._transport:
             return
         packet = bytearray()

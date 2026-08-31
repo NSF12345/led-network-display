@@ -1,7 +1,7 @@
 """
 Central config, loaded from environment variables (see .env.example).
-Fails loudly on startup if required SNMPv3 fields are missing — better
-than silently polling with broken auth.
+Fails loudly on startup if required SNMP fields for the selected
+SNMP_VERSION are missing — better than silently polling with broken auth.
 """
 import os
 
@@ -39,12 +39,25 @@ class Config:
     SNMP_PORT = _get_int("SNMP_PORT", 161)
     SNMP_IF_INDEX = _get_int("SNMP_IF_INDEX", required=_snmp_required)  # ifIndex of the port to monitor
 
+    # "v1"/"v2c" = community-string auth, no encryption — easier to enable
+    # (e.g. UniFi's built-in controller SNMP toggle only offers these), but
+    # sends the community string in the clear. "v3" = USM auth+privacy (the
+    # original target) — more setup (SSH into the switch), more secure.
+    SNMP_VERSION = _get("SNMP_VERSION", "v3").lower()
+    if SNMP_VERSION not in ("v1", "v2c", "v3"):
+        raise RuntimeError(f"Invalid SNMP_VERSION: {SNMP_VERSION!r} (expected 'v1', 'v2c', or 'v3')")
+    _snmp_community_required = _snmp_required and SNMP_VERSION in ("v1", "v2c")
+    _snmp_v3_required = _snmp_required and SNMP_VERSION == "v3"
+
+    # SNMPv1/v2c auth (community string)
+    SNMP_COMMUNITY = _get("SNMP_COMMUNITY", required=_snmp_community_required)
+
     # SNMPv3 auth (USM)
-    SNMP_USER = _get("SNMP_USER", required=_snmp_required)
+    SNMP_USER = _get("SNMP_USER", required=_snmp_v3_required)
     SNMP_AUTH_PROTOCOL = _get("SNMP_AUTH_PROTOCOL", "SHA")   # MD5 | SHA | SHA224 | SHA256 | SHA384 | SHA512
-    SNMP_AUTH_PASSWORD = _get("SNMP_AUTH_PASSWORD", required=_snmp_required)
+    SNMP_AUTH_PASSWORD = _get("SNMP_AUTH_PASSWORD", required=_snmp_v3_required)
     SNMP_PRIV_PROTOCOL = _get("SNMP_PRIV_PROTOCOL", "AES128")  # DES | AES128 | AES192 | AES256
-    SNMP_PRIV_PASSWORD = _get("SNMP_PRIV_PASSWORD", required=_snmp_required)
+    SNMP_PRIV_PASSWORD = _get("SNMP_PRIV_PASSWORD", required=_snmp_v3_required)
     SNMP_CONTEXT_NAME = _get("SNMP_CONTEXT_NAME", "")
 
     # --- Dummy traffic source tuning (only used when TRAFFIC_SOURCE=dummy) ---
@@ -68,11 +81,26 @@ class Config:
     RATE_SCALE_MIN_BYTES = _get_float("RATE_SCALE_MIN_BYTES", 1_000)        # ~8kbps floor
     RATE_SCALE_MAX_BYTES = _get_float("RATE_SCALE_MAX_BYTES", 50_000_000)  # ~400mbps ceiling
 
-    RX_COLOR = tuple(int(x) for x in _get("RX_COLOR", "0,255,255").split(","))  # cyan
-    TX_COLOR = tuple(int(x) for x in _get("TX_COLOR", "0,255,0").split(","))    # green
+    RX_COLOR = tuple(int(x) for x in _get("RX_COLOR", "0,205,255").split(","))            # cyan
+    RX_HIGHLIGHT_COLOR = tuple(int(x) for x in _get("RX_HIGHLIGHT_COLOR", "210,255,255").split(","))  # bright particle head
+    TX_COLOR = tuple(int(x) for x in _get("TX_COLOR", "0,255,100").split(","))            # green
+    TX_HIGHLIGHT_COLOR = tuple(int(x) for x in _get("TX_HIGHLIGHT_COLOR", "70,255,220").split(","))   # bright particle head
 
-    PARTICLE_SPEED_PIXELS_PER_SEC = _get_float("PARTICLE_SPEED_PIXELS_PER_SEC", 60.0)
+    # Travel speed, per direction (original blog post used 15.0/13.5 LEDs-per-sec
+    # on a 90-LED strip; scaled here for LED_COUNT=180 by default).
+    RX_PARTICLE_SPEED_PIXELS_PER_SEC = _get_float("RX_PARTICLE_SPEED_PIXELS_PER_SEC", 30.0)
+    TX_PARTICLE_SPEED_PIXELS_PER_SEC = _get_float("TX_PARTICLE_SPEED_PIXELS_PER_SEC", 27.0)
+    # Per-particle random speed variation, e.g. 0.10 = +/-10%.
+    PARTICLE_SPEED_JITTER = _get_float("PARTICLE_SPEED_JITTER", 0.10)
     PARTICLE_TRAIL_LENGTH = _get_float("PARTICLE_TRAIL_LENGTH", 3.0)
+    # Cap on live particles per direction, so heavy traffic saturates
+    # brightness/spawn-rate instead of piling up indefinitely.
+    PARTICLE_MAX_PER_DIRECTION = _get_int("PARTICLE_MAX_PER_DIRECTION", 24)
+
+    # If no new traffic sample arrives within this many seconds (SNMP target
+    # unreachable, etc.), decay rates to zero so the animation fades to idle
+    # instead of looping the last-known traffic forever.
+    STALE_DATA_TIMEOUT_SECONDS = _get_float("STALE_DATA_TIMEOUT_SECONDS", 3.0)
 
     # --- Output sinks ---
     WEB_ENABLED = _get("WEB_ENABLED", "true").lower() == "true"

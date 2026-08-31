@@ -1,7 +1,8 @@
 """
 Serves a static HTML/JS page that renders the LED strip as circles on a
 canvas, and broadcasts each rendered frame to all connected browsers over
-a WebSocket as a flat JSON array of [r, g, b, r, g, b, ...] ints.
+a WebSocket as JSON: {"frame": [r, g, b, r, g, b, ...], "rx": bytes_per_sec,
+"tx": bytes_per_sec}.
 
 This is the stand-in output sink for testing the animation before real
 hardware exists — swap for WledOutput once you have a controller.
@@ -22,15 +23,31 @@ WEB_DIR = Path(__file__).resolve().parent.parent.parent / "web"
 class WebsocketOutput(OutputSink):
     def __init__(self, cfg):
         self.cfg = cfg
+        # Set by main.py after a one-off SNMP lookup (switch_name, switch_port)
+        # — empty for dummy mode, or if the lookup failed.
+        self.device_info: dict = {}
         self._clients: set[web.WebSocketResponse] = set()
         self._app = web.Application()
         self._app.router.add_get("/", self._handle_index)
+        self._app.router.add_get("/api/info", self._handle_info)
         self._app.router.add_get("/ws", self._handle_ws)
         self._app.router.add_static("/static/", WEB_DIR, name="static")
         self._runner = None
 
     async def _handle_index(self, request):
         return web.FileResponse(WEB_DIR / "index.html")
+
+    async def _handle_info(self, request):
+        if self.cfg.TRAFFIC_SOURCE == "snmp":
+            info = {
+                "source": "snmp",
+                "host": self.cfg.SNMP_HOST,
+                "switch_name": self.device_info.get("switch_name") or self.cfg.SNMP_HOST,
+                "switch_port": self.device_info.get("switch_port") or f"ifIndex {self.cfg.SNMP_IF_INDEX}",
+            }
+        else:
+            info = {"source": "dummy"}
+        return web.json_response(info)
 
     async def _handle_ws(self, request):
         ws = web.WebSocketResponse()
@@ -57,11 +74,11 @@ class WebsocketOutput(OutputSink):
         if self._runner:
             await self._runner.cleanup()
 
-    async def send_frame(self, frame: list[tuple[int, int, int]]) -> None:
+    async def send_frame(self, frame: list[tuple[int, int, int]], rx_rate: float, tx_rate: float) -> None:
         if not self._clients:
             return
         flat = [v for rgb in frame for v in rgb]
-        payload = json.dumps(flat)
+        payload = json.dumps({"frame": flat, "rx": rx_rate, "tx": tx_rate})
         dead = []
         for ws in self._clients:
             try:

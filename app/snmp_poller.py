@@ -1,29 +1,37 @@
 """
 Polls a single interface's 64-bit octet counters (ifHCInOctets/ifHCOutOctets,
-IF-MIB) over SNMPv3 and turns successive samples into smoothed bytes/sec
-rates for RX and TX.
+IF-MIB) over SNMP (v2c or v3, per cfg.SNMP_VERSION) and turns successive
+samples into smoothed bytes/sec rates for RX and TX.
 
-NOTE: written against pysnmp-lextudio 6.x's asyncio v3arch API
-(pysnmp.hlapi.v3arch.asyncio). This has NOT been tested against a live
-device — pysnmp's high-level API has shifted across major versions before.
-If imports/calls fail on your install, run `pip show pysnmp` and check
-that against the pysnmp docs for your version; the SNMP mechanics here
-(USM auth/priv setup, ifHCInOctets/ifHCOutOctets OIDs) are correct
-regardless of which exact API shape your installed version expects.
+Uses raw numeric OIDs (1.3.6.1.2.1.31.1.1.1.6/.10 + ifIndex) rather than
+symbolic MIB names (ObjectIdentity("IF-MIB", "ifHCInOctets", idx)) —
+verified against a real install that the IF-MIB module isn't bundled with
+pysnmp-lextudio, so symbolic resolution throws MibNotFoundError. Numeric
+OIDs skip MIB compilation entirely and are standard practice for exactly
+this reason.
+
+Verified against pysnmp-lextudio 6.3.0 (6.1.4 from early planning doesn't
+exist on PyPI): the installed API is pysnmp.hlapi.asyncio (not
+hlapi.v3arch.asyncio), the fetch function is getCmd (not get_cmd), and
+UdpTransportTarget is a plain sync constructor (not an async .create()).
+Confirmed end-to-end against an unreachable test address (192.0.2.1) —
+request builds and sends correctly, times out as expected. Not yet
+confirmed against a real device's actual SNMPv3 credentials.
 """
 import asyncio
 import logging
 import time
 
 from .traffic_rates import TrafficRates
-from pysnmp.hlapi.v3arch.asyncio import (
+from pysnmp.hlapi.asyncio import (
+    CommunityData,
     ContextData,
     ObjectIdentity,
     ObjectType,
     SnmpEngine,
     UdpTransportTarget,
     UsmUserData,
-    get_cmd,
+    getCmd,
     usmAesCfb128Protocol,
     usmAesCfb192Protocol,
     usmAesCfb256Protocol,
@@ -38,6 +46,16 @@ from pysnmp.hlapi.v3arch.asyncio import (
 )
 
 log = logging.getLogger("snmp_poller")
+
+# IF-MIB ifHCInOctets / ifHCOutOctets, addressed numerically (see module docstring).
+IF_HC_IN_OCTETS_OID = "1.3.6.1.2.1.31.1.1.1.6"
+IF_HC_OUT_OCTETS_OID = "1.3.6.1.2.1.31.1.1.1.10"
+
+# For display only (which switch, which physical port) — not part of the
+# per-second polling loop.
+SYS_NAME_OID = "1.3.6.1.2.1.1.5.0"      # SNMPv2-MIB sysName
+SYS_DESCR_OID = "1.3.6.1.2.1.1.1.0"     # SNMPv2-MIB sysDescr, used as a fallback if sysName is unset
+IF_NAME_OID = "1.3.6.1.2.1.31.1.1.1.1"  # IF-MIB ifName, e.g. "0/1" for physical port 1
 
 AUTH_PROTOCOLS = {
     "MD5": usmHMACMD5AuthProtocol,
@@ -61,15 +79,23 @@ class SnmpPoller:
     def __init__(self, cfg):
         self.cfg = cfg
         self._engine = SnmpEngine()
-        self._user_data = UsmUserData(
-            cfg.SNMP_USER,
-            authKey=cfg.SNMP_AUTH_PASSWORD,
-            privKey=cfg.SNMP_PRIV_PASSWORD,
-            authProtocol=AUTH_PROTOCOLS[cfg.SNMP_AUTH_PROTOCOL.upper()],
-            privProtocol=PRIV_PROTOCOLS[cfg.SNMP_PRIV_PROTOCOL.upper()],
-        )
+        if cfg.SNMP_VERSION in ("v1", "v2c"):
+            # mpModel: 0 = v1, 1 = v2c — neither is encrypted, the
+            # community string is sent in the clear on the wire.
+            mp_model = 0 if cfg.SNMP_VERSION == "v1" else 1
+            self._auth_data = CommunityData(cfg.SNMP_COMMUNITY, mpModel=mp_model)
+        else:
+            self._auth_data = UsmUserData(
+                cfg.SNMP_USER,
+                authKey=cfg.SNMP_AUTH_PASSWORD,
+                privKey=cfg.SNMP_PRIV_PASSWORD,
+                authProtocol=AUTH_PROTOCOLS[cfg.SNMP_AUTH_PROTOCOL.upper()],
+                privProtocol=PRIV_PROTOCOLS[cfg.SNMP_PRIV_PROTOCOL.upper()],
+            )
         self._context = ContextData(contextName=cfg.SNMP_CONTEXT_NAME)
-        self._transport = None  # created lazily, see _get_transport
+        self._transport = UdpTransportTarget(
+            (cfg.SNMP_HOST, cfg.SNMP_PORT), timeout=2, retries=1
+        )
 
         self._prev_rx = None
         self._prev_tx = None
@@ -77,22 +103,14 @@ class SnmpPoller:
         self._smoothed_rx = 0.0
         self._smoothed_tx = 0.0
 
-    async def _get_transport(self):
-        if self._transport is None:
-            self._transport = await UdpTransportTarget.create(
-                (self.cfg.SNMP_HOST, self.cfg.SNMP_PORT)
-            )
-        return self._transport
-
     async def _fetch_counters(self):
-        transport = await self._get_transport()
-        error_indication, error_status, error_index, var_binds = await get_cmd(
+        error_indication, error_status, error_index, var_binds = await getCmd(
             self._engine,
-            self._user_data,
-            transport,
+            self._auth_data,
+            self._transport,
             self._context,
-            ObjectType(ObjectIdentity("IF-MIB", "ifHCInOctets", self.cfg.SNMP_IF_INDEX)),
-            ObjectType(ObjectIdentity("IF-MIB", "ifHCOutOctets", self.cfg.SNMP_IF_INDEX)),
+            ObjectType(ObjectIdentity(f"{IF_HC_IN_OCTETS_OID}.{self.cfg.SNMP_IF_INDEX}")),
+            ObjectType(ObjectIdentity(f"{IF_HC_OUT_OCTETS_OID}.{self.cfg.SNMP_IF_INDEX}")),
         )
 
         if error_indication:
@@ -136,6 +154,33 @@ class SnmpPoller:
 
         self._prev_rx, self._prev_tx, self._prev_time = rx_octets, tx_octets, now
         return TrafficRates(self._smoothed_rx, self._smoothed_tx)
+
+    async def get_device_info(self) -> dict:
+        """One-off lookup of human-readable device identity (switch name,
+        physical port label) for display in the web preview — not part of
+        the per-second polling loop. Best-effort: returns {} on failure
+        rather than blocking startup over a cosmetic lookup."""
+        try:
+            error_indication, error_status, error_index, var_binds = await getCmd(
+                self._engine,
+                self._auth_data,
+                self._transport,
+                self._context,
+                ObjectType(ObjectIdentity(SYS_NAME_OID)),
+                ObjectType(ObjectIdentity(SYS_DESCR_OID)),
+                ObjectType(ObjectIdentity(f"{IF_NAME_OID}.{self.cfg.SNMP_IF_INDEX}")),
+            )
+            if error_indication or error_status:
+                log.warning("Could not fetch device info: %s", error_indication or error_status.prettyPrint())
+                return {}
+            sys_name = str(var_binds[0][1]).strip()
+            sys_descr = str(var_binds[1][1]).strip()
+            if_name = str(var_binds[2][1]).strip()
+            switch_name = sys_name or sys_descr.split(",")[0].strip() or self.cfg.SNMP_HOST
+            return {"switch_name": switch_name, "switch_port": if_name}
+        except Exception:
+            log.exception("Failed to fetch device info (non-fatal, continuing)")
+            return {}
 
     async def poll_once(self) -> TrafficRates:
         rx_octets, tx_octets = await self._fetch_counters()

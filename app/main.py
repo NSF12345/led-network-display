@@ -30,18 +30,29 @@ def build_traffic_source():
         raise RuntimeError(f"Unknown TRAFFIC_SOURCE: {config.TRAFFIC_SOURCE!r} (expected 'dummy' or 'snmp')")
 
 
-async def render_loop(renderer: ParticleRenderer, sinks: list):
+async def render_loop(renderer: ParticleRenderer, sinks: list, last_sample_time: list):
     frame_interval = 1.0 / config.RENDER_FPS
     last = time.monotonic()
+    stale_logged = False
     while True:
         now = time.monotonic()
         dt = now - last
         last = now
 
+        if now - last_sample_time[0] > config.STALE_DATA_TIMEOUT_SECONDS:
+            # No fresh traffic sample recently (e.g. SNMP target unreachable) —
+            # decay to idle instead of looping the last-known rates forever.
+            renderer.update_rates(0.0, 0.0)
+            if not stale_logged:
+                log.warning("No traffic sample in over %.0fs — fading to idle", config.STALE_DATA_TIMEOUT_SECONDS)
+                stale_logged = True
+        else:
+            stale_logged = False
+
         frame = renderer.step(dt)
         for sink in sinks:
             try:
-                await sink.send_frame(frame)
+                await sink.send_frame(frame, renderer.rx_rate, renderer.tx_rate)
             except Exception:
                 log.exception("Output sink %s failed to send frame", sink)
 
@@ -54,25 +65,35 @@ async def main():
     poller = build_traffic_source()
 
     sinks = []
+    web_sink = None
     if config.WEB_ENABLED:
-        sinks.append(WebsocketOutput(config))
+        web_sink = WebsocketOutput(config)
+        sinks.append(web_sink)
     if config.WLED_ENABLED:
         sinks.append(WledOutput(config))
 
     if not sinks:
         log.warning("No output sinks enabled (WEB_ENABLED and WLED_ENABLED both false) — nothing will be visible")
 
+    if web_sink is not None and config.TRAFFIC_SOURCE == "snmp":
+        # Best-effort, one-off lookup so the web preview can show which
+        # switch/port it's actually polling instead of just the raw IP.
+        web_sink.device_info = await poller.get_device_info()
+
     for sink in sinks:
         await sink.start()
+
+    last_sample_time = [time.monotonic()]
 
     def on_sample(rates):
         log.info("RX %.0f B/s  TX %.0f B/s", rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
         renderer.update_rates(rates.rx_bytes_per_sec, rates.tx_bytes_per_sec)
+        last_sample_time[0] = time.monotonic()
 
     try:
         await asyncio.gather(
             poller.run(on_sample),
-            render_loop(renderer, sinks),
+            render_loop(renderer, sinks, last_sample_time),
         )
     finally:
         for sink in sinks:
