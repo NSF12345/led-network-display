@@ -1,6 +1,10 @@
 services:
   led-network-poller:
-    build: .
+    # Published by .github/workflows/docker-publish.yml on every push to
+    # main. This is a private package (repo is private) — the host running
+    # this compose file needs `docker login ghcr.io` first, with a PAT that
+    # has the read:packages scope, or the pull will fail.
+    image: ghcr.io/nsf12345/led-network-poller:latest
     container_name: led-network-poller
     restart: unless-stopped
     env_file: .env
