@@ -76,6 +76,8 @@ class Config:
     DUMMY_TX_BASELINE_BYTES = _get_float("DUMMY_TX_BASELINE_BYTES", 50_000)
     DUMMY_SPIKE_CHANCE = _get_float("DUMMY_SPIKE_CHANCE", 0.08)  # probability per sample of a traffic burst
     DUMMY_SPIKE_MAX_BYTES = _get_float("DUMMY_SPIKE_MAX_BYTES", 20_000_000)
+    # How long a manually-triggered inject (web UI "Inject RX/TX" buttons) lasts.
+    DUMMY_INJECT_DURATION_SECONDS = _get_float("DUMMY_INJECT_DURATION_SECONDS", 5.0)
 
     # --- Polling / rendering ---
     POLL_INTERVAL_SECONDS = _get_float("POLL_INTERVAL_SECONDS", 1.0)
