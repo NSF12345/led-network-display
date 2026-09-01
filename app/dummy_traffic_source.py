@@ -24,6 +24,17 @@ class DummyTrafficSource:
         self.cfg = cfg
         self._rx_wander = 1.0  # multiplier on baseline, drifts over time
         self._tx_wander = 1.0
+        # Manually triggered bursts (e.g. from the web UI's inject buttons),
+        # on top of the normal wander/random-spike traffic - {direction: expiry monotonic time}.
+        self._inject_until = {"rx": 0.0, "tx": 0.0}
+
+    def inject(self, direction: str) -> None:
+        """Force elevated traffic on the given direction ("rx" or "tx") for
+        DUMMY_INJECT_DURATION_SECONDS, e.g. triggered from the web UI to
+        demo the visualization without waiting on a random spike."""
+        if direction not in self._inject_until:
+            raise ValueError(f"Unknown direction: {direction!r} (expected 'rx' or 'tx')")
+        self._inject_until[direction] = time.monotonic() + self.cfg.DUMMY_INJECT_DURATION_SECONDS
 
     def _next_sample(self) -> TrafficRates:
         # Slow random walk on the multiplier, clamped so it doesn't wander to zero or infinity.
@@ -37,6 +48,12 @@ class DummyTrafficSource:
             rx += random.uniform(0, self.cfg.DUMMY_SPIKE_MAX_BYTES)
         if random.random() < self.cfg.DUMMY_SPIKE_CHANCE:
             tx += random.uniform(0, self.cfg.DUMMY_SPIKE_MAX_BYTES)
+
+        now = time.monotonic()
+        if now < self._inject_until["rx"]:
+            rx = self.cfg.DUMMY_SPIKE_MAX_BYTES
+        if now < self._inject_until["tx"]:
+            tx = self.cfg.DUMMY_SPIKE_MAX_BYTES
 
         return TrafficRates(rx_bytes_per_sec=rx, tx_bytes_per_sec=tx)
 

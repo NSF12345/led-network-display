@@ -26,10 +26,15 @@ class WebsocketOutput(OutputSink):
         # Set by main.py after a one-off SNMP lookup (switch_name, switch_port)
         # - empty for dummy mode, or if the lookup failed.
         self.device_info: dict = {}
+        # Set by main.py only when TRAFFIC_SOURCE=dummy - lets the web UI's
+        # inject buttons force a temporary traffic burst. None otherwise,
+        # so /api/inject can tell "not dummy mode" apart from "no clients".
+        self.traffic_source = None
         self._clients: set[web.WebSocketResponse] = set()
         self._app = web.Application()
         self._app.router.add_get("/", self._handle_index)
         self._app.router.add_get("/api/info", self._handle_info)
+        self._app.router.add_post("/api/inject", self._handle_inject)
         self._app.router.add_get("/ws", self._handle_ws)
         self._app.router.add_static("/static/", WEB_DIR, name="static")
         self._runner = None
@@ -51,6 +56,17 @@ class WebsocketOutput(OutputSink):
             info = {"source": "dummy"}
         info["app_version"] = self.cfg.APP_VERSION
         return web.json_response(info)
+
+    async def _handle_inject(self, request):
+        if self.traffic_source is None:
+            return web.json_response({"error": "inject only works in dummy mode"}, status=400)
+        try:
+            body = await request.json()
+            direction = body["direction"]
+            self.traffic_source.inject(direction)
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            return web.json_response({"error": str(e)}, status=400)
+        return web.json_response({"ok": True})
 
     async def _handle_ws(self, request):
         ws = web.WebSocketResponse()

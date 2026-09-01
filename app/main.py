@@ -80,6 +80,9 @@ async def main():
         # Best-effort, one-off lookup so the web preview can show which
         # switch/port it's actually polling instead of just the raw IP.
         web_sink.device_info = await poller.get_device_info()
+    elif web_sink is not None and config.TRAFFIC_SOURCE == "dummy":
+        # Lets the web UI's inject buttons force a temporary traffic burst.
+        web_sink.traffic_source = poller
 
     for sink in sinks:
         await sink.start()
