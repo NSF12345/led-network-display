@@ -2,10 +2,7 @@ services:
   led-network-poller:
     # Published by .github/workflows/docker-publish.yml - :latest only
     # moves on a tagged release (see .github/workflows/release.yml), not
-    # on every push to main. This is a private package (repo is private) -
-    # the host running this compose file needs `docker login ghcr.io`
-    # first, with a PAT that has the read:packages scope, or the pull
-    # will fail.
+    # on every push to main. Package is public, no docker login needed.
     image: ghcr.io/nsf12345/led-network-poller:latest
     container_name: led-network-poller
     restart: unless-stopped

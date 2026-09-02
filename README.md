@@ -169,9 +169,8 @@ python -m app.main
 ```
 docker compose up -d
 ```
-Pulls `ghcr.io/nsf12345/led-network-poller` and
-starts the container. The package is private, so the host running this
-needs `docker login ghcr.io` first (a PAT with `read:packages` scope).
+Pulls `ghcr.io/nsf12345/led-network-poller` and starts the container.
+The package is public, so no `docker login` is needed.
 
 Check it started and see the first poll cycle:
 ```
