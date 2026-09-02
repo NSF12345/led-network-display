@@ -1,4 +1,4 @@
-# LED Network Display - poller
+# LED Network Display
 
 Turns network RX/TX byte rates into a moving-particle animation and
 renders it to a browser preview and/or a physical WS2812B LED strip via
@@ -169,12 +169,12 @@ python -m app.main
 ```
 docker compose up -d
 ```
-Pulls `ghcr.io/nsf12345/led-network-poller` and starts the container.
+Pulls `ghcr.io/nsf12345/led-network-display` and starts the container.
 The package is public, so no `docker login` is needed.
 
 Check it started and see the first poll cycle:
 ```
-docker compose logs -f led-network-poller
+docker compose logs -f led-network-display
 ```
 By default (`LOG_LEVEL=INFO`) this only shows startup/connection
 messages - the per-poll `RX ... B/s  TX ... B/s` line is `DEBUG`-only,
