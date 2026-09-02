@@ -30,7 +30,7 @@ def build_traffic_source():
         raise RuntimeError(f"Unknown TRAFFIC_SOURCE: {config.TRAFFIC_SOURCE!r} (expected 'dummy' or 'snmp')")
 
 
-async def render_loop(renderer: ParticleRenderer, sinks: list, last_sample_time: list):
+async def render_loop(renderer: ParticleRenderer, sinks: list, last_sample_time: list, web_sink=None):
     frame_interval = 1.0 / config.RENDER_FPS
     last = time.monotonic()
     stale_logged = False
@@ -49,9 +49,20 @@ async def render_loop(renderer: ParticleRenderer, sinks: list, last_sample_time:
         else:
             stale_logged = False
 
-        frame = renderer.step(dt)
+        renderer.advance(dt)
+        # The web preview always sees everything; other sinks (WLED) only
+        # see manually-injected particles if that sink has opted in.
+        web_frame = renderer.render(include_injected=True)
+        other_frame = None
         for sink in sinks:
             try:
+                if sink is web_sink:
+                    frame = web_frame
+                else:
+                    if other_frame is None:
+                        include_injected = web_sink.inject_to_led if web_sink is not None else False
+                        other_frame = renderer.render(include_injected=include_injected)
+                    frame = other_frame
                 await sink.send_frame(frame, renderer.rx_rate, renderer.tx_rate)
             except Exception:
                 log.exception("Output sink %s failed to send frame", sink)
@@ -81,8 +92,11 @@ async def main():
         # switch/port it's actually polling instead of just the raw IP.
         web_sink.device_info = await poller.get_device_info()
     elif web_sink is not None and config.TRAFFIC_SOURCE == "dummy":
-        # Lets the web UI's inject buttons force a temporary traffic burst.
+        # Lets the web UI's inject buttons also force a temporary traffic rate override.
         web_sink.traffic_source = poller
+    if web_sink is not None:
+        # Lets /api/inject trigger a particle burst regardless of traffic source.
+        web_sink.renderer = renderer
 
     for sink in sinks:
         await sink.start()
@@ -99,7 +113,7 @@ async def main():
     try:
         await asyncio.gather(
             poller.run(on_sample),
-            render_loop(renderer, sinks, last_sample_time),
+            render_loop(renderer, sinks, last_sample_time, web_sink),
         )
     finally:
         for sink in sinks:

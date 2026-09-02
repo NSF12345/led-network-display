@@ -27,14 +27,22 @@ class WebsocketOutput(OutputSink):
         # - empty for dummy mode, or if the lookup failed.
         self.device_info: dict = {}
         # Set by main.py only when TRAFFIC_SOURCE=dummy - lets the web UI's
-        # inject buttons force a temporary traffic burst. None otherwise,
-        # so /api/inject can tell "not dummy mode" apart from "no clients".
+        # inject buttons also force a temporary traffic rate override.
         self.traffic_source = None
+        # Set by main.py - lets /api/inject trigger a particle burst
+        # regardless of traffic source.
+        self.renderer = None
+        # Whether a manual inject burst should also reach the WLED strip
+        # (not just the web preview). In-memory only, resets to False on
+        # restart - not meant to persist.
+        self.inject_to_led = False
         self._clients: set[web.WebSocketResponse] = set()
         self._app = web.Application()
         self._app.router.add_get("/", self._handle_index)
         self._app.router.add_get("/api/info", self._handle_info)
         self._app.router.add_post("/api/inject", self._handle_inject)
+        self._app.router.add_post("/api/inject-to-led", self._handle_inject_to_led)
+        self._app.router.add_post("/api/effect", self._handle_effect)
         self._app.router.add_get("/ws", self._handle_ws)
         self._app.router.add_static("/static/", WEB_DIR, name="static")
         self._runner = None
@@ -58,14 +66,28 @@ class WebsocketOutput(OutputSink):
         return web.json_response(info)
 
     async def _handle_inject(self, request):
-        if self.traffic_source is None:
-            return web.json_response({"error": "inject only works in dummy mode"}, status=400)
         try:
             body = await request.json()
             direction = body["direction"]
-            self.traffic_source.inject(direction)
+            if self.traffic_source is not None:
+                self.traffic_source.inject(direction)
+            if self.renderer is not None:
+                self.renderer.inject(direction)
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             return web.json_response({"error": str(e)}, status=400)
+        return web.json_response({"ok": True})
+
+    async def _handle_inject_to_led(self, request):
+        try:
+            body = await request.json()
+            self.inject_to_led = bool(body["enabled"])
+        except (json.JSONDecodeError, KeyError) as e:
+            return web.json_response({"error": str(e)}, status=400)
+        return web.json_response({"ok": True, "enabled": self.inject_to_led})
+
+    async def _handle_effect(self, request):
+        if self.renderer is not None:
+            self.renderer.trigger_effect()
         return web.json_response({"ok": True})
 
     async def _handle_ws(self, request):

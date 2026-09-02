@@ -7,8 +7,10 @@ TX particles travel high-index -> low-index (green by default).
 Traffic rate controls spawn frequency; heavier traffic also brightens
 and lengthens trails slightly, matching the original blog's description.
 """
+import colorsys
 import math
 import random
+import time
 from dataclasses import dataclass
 
 
@@ -19,6 +21,11 @@ class Particle:
     brightness: float  # 0.0-1.0
     trail: float        # trail length in pixels
     speed: float         # pixels per second, jittered per-particle
+    # True only for particles spawned during a manual inject burst - lets
+    # render() optionally exclude them (e.g. from the WLED-bound frame).
+    injected: bool = False
+    # Optional color override. None for normal particles.
+    hue: float | None = None
 
 
 def _rate_to_intensity(rate_bytes_per_sec: float, min_bytes: float, max_bytes: float) -> float:
@@ -45,6 +52,12 @@ class ParticleRenderer:
         self._tx_rate = 0.0
         self._spawn_accumulator_rx = 0.0
         self._spawn_accumulator_tx = 0.0
+        # Manual inject burst (web UI buttons) - independent of the actual
+        # traffic rate/source, so it works whether real traffic is idle or
+        # maxed out. {direction: expiry monotonic time}.
+        self._burst_until = {"rx": 0.0, "tx": 0.0}
+        # Separate, rarer trigger - both directions at once.
+        self._effect_until = 0.0
 
     @property
     def rx_rate(self) -> float:
@@ -58,9 +71,41 @@ class ParticleRenderer:
         self._rx_rate = rx_bytes_per_sec
         self._tx_rate = tx_bytes_per_sec
 
+    def inject(self, direction: str) -> None:
+        """Triggers a particle burst on the given direction ("rx" or "tx")
+        for INJECT_BURST_DURATION_SECONDS, regardless of the current
+        traffic rate or source. Also spawns an immediate tight cluster of
+        particles, so it reads as an obvious "pulse" rather than just
+        gradually heavier traffic."""
+        if direction not in self._burst_until:
+            raise ValueError(f"Unknown direction: {direction!r} (expected 'rx' or 'tx')")
+        self._burst_until[direction] = time.monotonic() + self.cfg.INJECT_BURST_DURATION_SECONDS
+        self._spawn_cluster(direction)
+
+    def trigger_effect(self) -> None:
+        """Separate from inject() - both directions at once."""
+        self._effect_until = time.monotonic() + self.cfg.INJECT_BURST_DURATION_SECONDS
+
+    def _spawn_cluster(self, direction: str, cluster_size: int = 12, spacing: float = 0.5) -> None:
+        particles = self._rx_particles if direction == "rx" else self._tx_particles
+        dir_sign = +1 if direction == "rx" else -1
+        base_speed = (self.cfg.RX_PARTICLE_SPEED_PIXELS_PER_SEC if direction == "rx"
+                      else self.cfg.TX_PARTICLE_SPEED_PIXELS_PER_SEC)
+        start_pos = 0.0 if dir_sign == 1 else float(self.led_count - 1)
+        jitter = self.cfg.PARTICLE_SPEED_JITTER
+        room = max(0, self.cfg.PARTICLE_MAX_PER_DIRECTION - len(particles))
+        for i in range(min(cluster_size, room)):
+            speed = base_speed * (1.0 - jitter + random.random() * 2 * jitter)
+            particles.append(Particle(
+                position=start_pos + dir_sign * i * spacing,
+                direction=dir_sign, brightness=1.0,
+                trail=self.cfg.PARTICLE_TRAIL_LENGTH * 2.0, speed=speed, injected=True))
+
     def _maybe_spawn(self, particles: list[Particle], rate: float, direction: int, dt: float,
-                      accumulator_attr: str, base_speed: float):
+                      accumulator_attr: str, base_speed: float, injected: bool, effect: bool):
         intensity = _rate_to_intensity(rate, self.cfg.RATE_SCALE_MIN_BYTES, self.cfg.RATE_SCALE_MAX_BYTES)
+        if injected:
+            intensity = max(intensity, 1.0)  # visible even if real traffic is idle
         if intensity <= 0.0:
             return
         # Spawn rate scales with intensity: up to ~15 particles/sec at max traffic.
@@ -76,16 +121,22 @@ class ParticleRenderer:
             brightness = 0.5 + 0.5 * intensity  # heavier traffic -> brighter
             trail = self.cfg.PARTICLE_TRAIL_LENGTH * (1.0 + intensity)  # and longer trail
             speed = base_speed * (1.0 - jitter + random.random() * 2 * jitter)
+            hue = random.random() if effect else None
             particles.append(Particle(position=start_pos, direction=direction, brightness=brightness,
-                                       trail=trail, speed=speed))
+                                       trail=trail, speed=speed, injected=injected, hue=hue))
         setattr(self, accumulator_attr, acc)
 
-    def step(self, dt: float) -> list[tuple[int, int, int]]:
-        """Advance the simulation by dt seconds and return the rendered frame."""
+    def advance(self, dt: float) -> None:
+        """Steps the particle simulation (spawning + physics) by dt seconds,
+        without rendering a frame - call render() separately to get one."""
+        now = time.monotonic()
+        effect = now < self._effect_until
+        rx_injected = now < self._burst_until["rx"] or effect
+        tx_injected = now < self._burst_until["tx"] or effect
         self._maybe_spawn(self._rx_particles, self._rx_rate, +1, dt, "_spawn_accumulator_rx",
-                           self.cfg.RX_PARTICLE_SPEED_PIXELS_PER_SEC)
+                           self.cfg.RX_PARTICLE_SPEED_PIXELS_PER_SEC, rx_injected, effect)
         self._maybe_spawn(self._tx_particles, self._tx_rate, -1, dt, "_spawn_accumulator_tx",
-                           self.cfg.TX_PARTICLE_SPEED_PIXELS_PER_SEC)
+                           self.cfg.TX_PARTICLE_SPEED_PIXELS_PER_SEC, tx_injected, effect)
 
         for p in self._rx_particles:
             p.position += p.direction * p.speed * dt
@@ -95,9 +146,16 @@ class ParticleRenderer:
         self._rx_particles = [p for p in self._rx_particles if -p.trail <= p.position <= self.led_count - 1 + p.trail]
         self._tx_particles = [p for p in self._tx_particles if -p.trail <= p.position <= self.led_count - 1 + p.trail]
 
+    def render(self, include_injected: bool = True) -> list[tuple[int, int, int]]:
+        """Paints the current particle state into a frame, optionally
+        excluding manually-injected particles (e.g. for a WLED sink that
+        hasn't opted into seeing injects)."""
+        rx = self._rx_particles if include_injected else [p for p in self._rx_particles if not p.injected]
+        tx = self._tx_particles if include_injected else [p for p in self._tx_particles if not p.injected]
+
         frame = [[0.0, 0.0, 0.0] for _ in range(self.led_count)]
-        self._paint(frame, self._rx_particles, self.cfg.RX_COLOR, self.cfg.RX_HIGHLIGHT_COLOR)
-        self._paint(frame, self._tx_particles, self.cfg.TX_COLOR, self.cfg.TX_HIGHLIGHT_COLOR)
+        self._paint(frame, rx, self.cfg.RX_COLOR, self.cfg.RX_HIGHLIGHT_COLOR)
+        self._paint(frame, tx, self.cfg.TX_COLOR, self.cfg.TX_HIGHLIGHT_COLOR)
 
         return [
             (min(255, int(r)), min(255, int(g)), min(255, int(b)))
@@ -121,12 +179,16 @@ class ParticleRenderer:
                 idx_high = idx_low + 1
                 frac = pos - idx_low
                 b = p.brightness * fade
-                # Blend from the bright highlight color at the head toward
-                # the base color along the trail.
-                blend = fade
-                r_c = highlight_color[0] * blend + color[0] * (1 - blend)
-                g_c = highlight_color[1] * blend + color[1] * (1 - blend)
-                b_c = highlight_color[2] * blend + color[2] * (1 - blend)
+                if p.hue is not None:
+                    r_h, g_h, b_h = colorsys.hsv_to_rgb(p.hue, 1.0, 1.0)
+                    r_c, g_c, b_c = r_h * 255, g_h * 255, b_h * 255
+                else:
+                    # Blend from the bright highlight color at the head toward
+                    # the base color along the trail.
+                    blend = fade
+                    r_c = highlight_color[0] * blend + color[0] * (1 - blend)
+                    g_c = highlight_color[1] * blend + color[1] * (1 - blend)
+                    b_c = highlight_color[2] * blend + color[2] * (1 - blend)
                 for idx, weight in ((idx_low, 1 - frac), (idx_high, frac)):
                     if 0 <= idx < self.led_count and weight > 0:
                         frame[idx][0] += r_c * b * weight

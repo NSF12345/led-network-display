@@ -78,6 +78,9 @@ class Config:
     DUMMY_SPIKE_MAX_BYTES = _get_float("DUMMY_SPIKE_MAX_BYTES", 20_000_000)
     # How long a manually-triggered inject (web UI "Inject RX/TX" buttons) lasts.
     DUMMY_INJECT_DURATION_SECONDS = _get_float("DUMMY_INJECT_DURATION_SECONDS", 5.0)
+    # Same, but for the renderer-level burst behind /api/inject - applies
+    # regardless of TRAFFIC_SOURCE, since it doesn't depend on faking a rate.
+    INJECT_BURST_DURATION_SECONDS = _get_float("INJECT_BURST_DURATION_SECONDS", 5.0)
 
     # --- Polling / rendering ---
     POLL_INTERVAL_SECONDS = _get_float("POLL_INTERVAL_SECONDS", 1.0)

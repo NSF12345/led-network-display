@@ -49,7 +49,7 @@
   #pause-btn.paused { color: #d29922; border-color: rgba(210, 153, 34, 0.4); }
   #pause-note { font-size: 0.75rem; color: #d29922; margin-bottom: -0.75rem; visibility: hidden; }
   #pause-note.visible { visibility: visible; }
-  #inject-controls { display: flex; gap: 0.6rem; }
+  #inject-controls { display: flex; align-items: center; gap: 0.6rem; }
   #inject-controls button {
     font-size: 0.75rem;
     color: #d8dee4;
@@ -61,6 +61,14 @@
   }
   #inject-rx-btn:hover { border-color: rgba(0, 205, 255, 0.6); color: #00cdff; }
   #inject-tx-btn:hover { border-color: rgba(0, 255, 100, 0.6); color: #00ff64; }
+  #inject-to-led-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: #8b949e;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -69,9 +77,10 @@
   <canvas id="strip" width="1200" height="80"></canvas>
   <div id="pause-note">only web-interface is paused</div>
   <button id="pause-btn">Pause</button>
-  <div id="inject-controls" hidden>
+  <div id="inject-controls">
     <button id="inject-rx-btn">Inject RX</button>
     <button id="inject-tx-btn">Inject TX</button>
+    <label id="inject-to-led-label"><input type="checkbox" id="inject-to-led-checkbox"> Inject to LED strip</label>
   </div>
   <div class="legend">
     <span><span class="dot" style="background:#00ffff"></span>RX <span id="rx-rate">-</span></span>
@@ -90,9 +99,9 @@ const txRateEl = document.getElementById('tx-rate');
 const versionEl = document.getElementById('version');
 const pauseBtn = document.getElementById('pause-btn');
 const pauseNote = document.getElementById('pause-note');
-const injectControls = document.getElementById('inject-controls');
 const injectRxBtn = document.getElementById('inject-rx-btn');
 const injectTxBtn = document.getElementById('inject-tx-btn');
+const injectToLedCheckbox = document.getElementById('inject-to-led-checkbox');
 
 function inject(direction) {
   fetch('/api/inject', {
@@ -103,6 +112,31 @@ function inject(direction) {
 }
 injectRxBtn.addEventListener('click', () => inject('rx'));
 injectTxBtn.addEventListener('click', () => inject('tx'));
+
+// Always starts unticked on a fresh page load, regardless of what any
+// other tab has set server-side - not meant to be a remembered setting.
+injectToLedCheckbox.addEventListener('change', () => {
+  fetch('/api/inject-to-led', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: injectToLedCheckbox.checked }),
+  }).catch(() => {});
+});
+
+const SEQUENCE = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+let sequenceProgress = 0;
+document.addEventListener('keydown', (e) => {
+  const expected = SEQUENCE[sequenceProgress];
+  if (e.key === expected || e.key.toLowerCase() === expected) {
+    sequenceProgress++;
+    if (sequenceProgress === SEQUENCE.length) {
+      sequenceProgress = 0;
+      fetch('/api/effect', { method: 'POST' }).catch(() => {});
+    }
+  } else {
+    sequenceProgress = (e.key === SEQUENCE[0]) ? 1 : 0;
+  }
+});
 
 // Client-side only - freezes what this browser tab renders, nothing
 // server-side. The backend keeps polling/rendering/streaming frames the
@@ -163,7 +197,6 @@ async function loadSourceInfo() {
       sourceBanner.title = '';
     }
     versionEl.textContent = info.app_version || '';
-    injectControls.hidden = info.source !== 'dummy';
   } catch (e) {
     sourceBanner.textContent = 'data source unknown (could not reach /api/info)';
   }
