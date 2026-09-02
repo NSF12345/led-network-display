@@ -42,7 +42,7 @@ class WebsocketOutput(OutputSink):
         self._app.router.add_get("/api/info", self._handle_info)
         self._app.router.add_post("/api/inject", self._handle_inject)
         self._app.router.add_post("/api/inject-to-led", self._handle_inject_to_led)
-        self._app.router.add_post("/api/effect", self._handle_effect)
+        self._app.router.add_post("/api/rainbow-burst", self._handle_rainbow_burst)
         self._app.router.add_get("/ws", self._handle_ws)
         self._app.router.add_static("/static/", WEB_DIR, name="static")
         self._runner = None
@@ -85,9 +85,10 @@ class WebsocketOutput(OutputSink):
             return web.json_response({"error": str(e)}, status=400)
         return web.json_response({"ok": True, "enabled": self.inject_to_led})
 
-    async def _handle_effect(self, request):
+    async def _handle_rainbow_burst(self, request):
+        # Internal only - not part of the public API, not documented.
         if self.renderer is not None:
-            self.renderer.trigger_effect()
+            self.renderer.trigger_rainbow_burst()
         return web.json_response({"ok": True})
 
     async def _handle_ws(self, request):

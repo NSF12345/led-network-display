@@ -56,8 +56,8 @@ class ParticleRenderer:
         # traffic rate/source, so it works whether real traffic is idle or
         # maxed out. {direction: expiry monotonic time}.
         self._burst_until = {"rx": 0.0, "tx": 0.0}
-        # Separate, rarer trigger - both directions at once.
-        self._effect_until = 0.0
+        # Burst trigger covering both directions at once - see trigger_rainbow_burst().
+        self._rainbow_until = 0.0
 
     @property
     def rx_rate(self) -> float:
@@ -82,9 +82,11 @@ class ParticleRenderer:
         self._burst_until[direction] = time.monotonic() + self.cfg.INJECT_BURST_DURATION_SECONDS
         self._spawn_cluster(direction)
 
-    def trigger_effect(self) -> None:
-        """Separate from inject() - both directions at once."""
-        self._effect_until = time.monotonic() + self.cfg.INJECT_BURST_DURATION_SECONDS
+    def trigger_rainbow_burst(self) -> None:
+        """Triggers a burst on both directions at once for
+        INJECT_BURST_DURATION_SECONDS, with each spawned particle getting a
+        random color instead of the usual RX/TX one."""
+        self._rainbow_until = time.monotonic() + self.cfg.INJECT_BURST_DURATION_SECONDS
 
     def _spawn_cluster(self, direction: str, cluster_size: int = 12, spacing: float = 0.5) -> None:
         particles = self._rx_particles if direction == "rx" else self._tx_particles
@@ -102,7 +104,7 @@ class ParticleRenderer:
                 trail=self.cfg.PARTICLE_TRAIL_LENGTH * 2.0, speed=speed, injected=True))
 
     def _maybe_spawn(self, particles: list[Particle], rate: float, direction: int, dt: float,
-                      accumulator_attr: str, base_speed: float, injected: bool, effect: bool):
+                      accumulator_attr: str, base_speed: float, injected: bool, rainbow: bool):
         intensity = _rate_to_intensity(rate, self.cfg.RATE_SCALE_MIN_BYTES, self.cfg.RATE_SCALE_MAX_BYTES)
         if injected:
             intensity = max(intensity, 1.0)  # visible even if real traffic is idle
@@ -121,7 +123,7 @@ class ParticleRenderer:
             brightness = 0.5 + 0.5 * intensity  # heavier traffic -> brighter
             trail = self.cfg.PARTICLE_TRAIL_LENGTH * (1.0 + intensity)  # and longer trail
             speed = base_speed * (1.0 - jitter + random.random() * 2 * jitter)
-            hue = random.random() if effect else None
+            hue = random.random() if rainbow else None
             particles.append(Particle(position=start_pos, direction=direction, brightness=brightness,
                                        trail=trail, speed=speed, injected=injected, hue=hue))
         setattr(self, accumulator_attr, acc)
@@ -130,13 +132,13 @@ class ParticleRenderer:
         """Steps the particle simulation (spawning + physics) by dt seconds,
         without rendering a frame - call render() separately to get one."""
         now = time.monotonic()
-        effect = now < self._effect_until
-        rx_injected = now < self._burst_until["rx"] or effect
-        tx_injected = now < self._burst_until["tx"] or effect
+        rainbow = now < self._rainbow_until
+        rx_injected = now < self._burst_until["rx"] or rainbow
+        tx_injected = now < self._burst_until["tx"] or rainbow
         self._maybe_spawn(self._rx_particles, self._rx_rate, +1, dt, "_spawn_accumulator_rx",
-                           self.cfg.RX_PARTICLE_SPEED_PIXELS_PER_SEC, rx_injected, effect)
+                           self.cfg.RX_PARTICLE_SPEED_PIXELS_PER_SEC, rx_injected, rainbow)
         self._maybe_spawn(self._tx_particles, self._tx_rate, -1, dt, "_spawn_accumulator_tx",
-                           self.cfg.TX_PARTICLE_SPEED_PIXELS_PER_SEC, tx_injected, effect)
+                           self.cfg.TX_PARTICLE_SPEED_PIXELS_PER_SEC, tx_injected, rainbow)
 
         for p in self._rx_particles:
             p.position += p.direction * p.speed * dt

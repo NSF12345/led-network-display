@@ -124,17 +124,25 @@ injectToLedCheckbox.addEventListener('change', () => {
 });
 
 const SEQUENCE = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+const SEQUENCE_TIMEOUT_MS = 5000;
 let sequenceProgress = 0;
+let lastSequenceKeyTime = 0;
 document.addEventListener('keydown', (e) => {
+  const now = Date.now();
+  if (sequenceProgress > 0 && now - lastSequenceKeyTime > SEQUENCE_TIMEOUT_MS) {
+    sequenceProgress = 0;
+  }
   const expected = SEQUENCE[sequenceProgress];
   if (e.key === expected || e.key.toLowerCase() === expected) {
     sequenceProgress++;
+    lastSequenceKeyTime = now;
     if (sequenceProgress === SEQUENCE.length) {
       sequenceProgress = 0;
-      fetch('/api/effect', { method: 'POST' }).catch(() => {});
+      fetch('/api/rainbow-burst', { method: 'POST' }).catch(() => {});
     }
   } else {
     sequenceProgress = (e.key === SEQUENCE[0]) ? 1 : 0;
+    lastSequenceKeyTime = now;
   }
 });
 
