@@ -48,12 +48,13 @@ jobs:
       - id: version
         # major.minor.bugfix release tags (v1.2.3) win when that's what
         # triggered this build; anything else (branch push, manual
-        # workflow_dispatch) falls back to the commit's short SHA.
+        # workflow_dispatch) falls back to the commit's short SHA plus a
+        # build timestamp, since those builds have no tag to date them.
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+            echo "value=sha-${GITHUB_SHA::7}-$(date -u +%Y%m%d-%H%M)" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: docker/build-push-action@v6
