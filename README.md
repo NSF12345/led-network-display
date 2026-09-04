@@ -99,18 +99,52 @@ MIB name - `pysnmp-lextudio` doesn't bundle the IF-MIB module, so
 symbolic lookups throw `MibNotFoundError`. This is standard SNMP
 (IF-MIB), not vendor-specific.
 
+### Link-aggregated (LACP) ports
+
+Verified against a real UniFi UDM (gateway) + USW-24-G2 (switch) pair
+with two ports LACP-bonded between them:
+
+- **Neither device exposes a combined counter for the aggregate.** On
+  the switch, only the individual member ports appear in the ifTable at
+  all - there's no Port-Channel/LAG `ifIndex` to point at, checked well
+  past the last physical port. On the gateway, a `lag0` interface (plus
+  per-member `lacpN` interfaces) does exist, but reported zero/static
+  traffic and `ifHighSpeed=0` on the firmware tested - the real counters
+  are on the individual physical member interfaces (`ethN`), not the LAG
+  interface itself.
+- **Point `SNMP_IF_INDEX` at one member port**, found the same way as
+  any other interface (walk `ifDescr`/`ifName`). That shows whatever
+  traffic LACP's flow-hash happens to send down that specific link, not
+  the aggregate's full throughput - a single flow (e.g. one file
+  transfer) sticks to one member link, it doesn't stripe across both.
+  Monitoring "the LAG" as one combined number isn't possible against
+  this hardware, since there's no single `ifIndex` that represents it.
+- This looks like UniFi-specific behavior on the firmware tested, not a
+  general SNMP limitation - `ifStackTable` (`1.3.6.1.2.1.31.1.2.1.3`) is
+  the standard IF-MIB mechanism for mapping a LAG `ifIndex` to its member
+  ports, and other vendors (Cisco, Aruba, MikroTik, etc.) commonly do
+  expose a proper Port-Channel/LAG `ifIndex` through it - it just wasn't
+  populated, or wired up to real traffic, on either the UDM or the
+  USW-24-G2 tested here. Not verified against other vendors.
+
 ### Known working devices
 
 Confirmed end-to-end (real traffic data, not just a connectivity check):
 
-| Vendor   | Hardware               | Firmware      | v1 | v2c | v3 | Notes |
-|----------|------------------------|---------------|----|----|----|-------|
-| Ubiquiti | US-8-60W               | 7.4.1         | ✅ | ✅  | ✅ | |
-| Ubiquiti | USW-Lite-16-PoE*       | 7.5.10*       | ✅ | ✅  | ✅ | No web tooltip (sysDescr is kernel-only) |
-| Ubiquiti | USW-24-G2*             | 7.5.10*       | ✅ | ✅  | ✅ | No web tooltip; no ENTITY-MIB either - model/firmware confirmed via app, not SNMP |
-| Ubiquiti | UDM-Pro (gateway)      | 5.1.31        | ✅ | ✅  | ✅ | ifIndex 1 is loopback, not WAN - walk ifDescr |
-| Ubiquiti | UAP-AC-Lite            | 6.8.2.15592   | ✅ | ✅  | ✅ | Single wired uplink (`eth0`), not multi-port |
-| Ubiquiti | UAP-AC-LR              | 6.8.2.15592   | ✅ | ✅  | ✅ | Single wired uplink (`eth0`), not multi-port |
+| Vendor   | Hardware               | Firmware      | v1 | v2c | v3 | LAG<br>counter | Notes |
+|----------|------------------------|---------------|----|----|----|-------------|-------|
+| Ubiquiti | US-8-60W               | 7.4.1         | ✅ | ✅  | ✅ | ❔          | |
+| Ubiquiti | USW-Lite-16-PoE*       | 7.5.10*       | ✅ | ✅  | ✅ | ❔          | No web tooltip (sysDescr is kernel-only) |
+| Ubiquiti | USW-24-G2*             | 7.5.10*       | ✅ | ✅  | ✅ | ❌          | No web tooltip; no ENTITY-MIB either - model/firmware confirmed via app, not SNMP |
+| Ubiquiti | UDM-Pro (gateway)      | 5.1.31        | ✅ | ✅  | ✅ | ❌          | ifIndex 1 is loopback, not WAN - walk ifDescr |
+| Ubiquiti | UAP-AC-Lite            | 6.8.2.15592   | ✅ | ✅  | ✅ | N/A         | Single wired uplink (`eth0`), not multi-port |
+| Ubiquiti | UAP-AC-LR              | 6.8.2.15592   | ✅ | ✅  | ✅ | N/A         | Single wired uplink (`eth0`), not multi-port |
+
+"LAG counter" = whether the device exposes a single combined SNMP
+counter for a link-aggregated (LACP) port group. ❌ means tested and
+confirmed absent - see [Link-aggregated (LACP) ports](#link-aggregated-lacp-ports).
+❔ means no aggregate is configured on that device to test against;
+N/A means the hardware doesn't support LAG at all.
 
 \* Model/firmware confirmed from the UniFi app, not SNMP - this device's
 `sysDescr` is kernel-build-only and it doesn't implement ENTITY-MIB

@@ -67,6 +67,8 @@ async def walk(host, auth, oid_base):
 
 Some devices (APs especially) list a dozen-plus interfaces - loopback, radios, per-SSID VAPs, VLAN sub-interfaces, bridges, tunnels - not just "the one real port." Prefer the physical wired uplink (an `eth0`-style entry) over wifi/VAP/bridge/VLAN sub-interfaces, unless you specifically want a sub-interface's traffic instead of the device's overall link.
 
+If the port under test is part of a LACP-aggregated group, don't assume a `lag0`/`lacpN`/Port-Channel-looking entry actually carries the traffic - on the UniFi hardware tested so far (UDM-Pro + USW-24-G2), those interfaces existed in the ifTable but reported `ifHighSpeed=0` and static/zero counters, while the real traffic was on the individual physical member interfaces. Verify with step 3 (sample twice, confirm it actually increments) before trusting any LAG-looking interface - if it's flat, fall back to the physical member ports and see [`README.md`'s Link-aggregated (LACP) ports section](README.md#link-aggregated-lacp-ports).
+
 ## 3. Verify real traffic, not a fluke
 
 A single counter read proves nothing. Pull the same OID twice, a couple of seconds apart, confirm the value actually increased:
@@ -89,3 +91,5 @@ If the port bind fails, a stale process from an earlier test run may already be 
 ## 5. Update the docs
 
 Add a row to the `Known working devices` table in `README.md` - vendor, hardware, firmware, which SNMP version(s) actually worked, and any device-specific notes (tooltip behavior, `ifIndex` quirks, anything that surprised you). Don't mark a version ✅ unless you completed step 4 for it - a connectivity check alone isn't "confirmed end-to-end" by this project's own stated bar.
+
+If a LAG was involved, fill in the `LAG counter` column too: ❌ if you confirmed there's no working combined counter (per the note in step 2), ✅ if the device actually does expose one, ❔ if no aggregate was configured on the device to test against, or N/A if the hardware doesn't support LAG at all.
