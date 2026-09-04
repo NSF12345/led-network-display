@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>LED Network Display - Preview</title>
 <style>
   :root { color-scheme: dark; }
@@ -16,12 +17,13 @@
     justify-content: center;
     min-height: 100vh;
     gap: 1.5rem;
+    touch-action: manipulation;
   }
   h1 { font-size: 1rem; font-weight: 500; color: #8b949e; letter-spacing: 0.05em; text-transform: uppercase; }
   #status { font-size: 0.85rem; color: #8b949e; }
   #status.connected { color: #3fb950; }
   #status.disconnected { color: #f85149; }
-  canvas { background: #05060a; border-radius: 8px; border: 1px solid #21262d; }
+  canvas { background: #05060a; border-radius: 8px; border: 1px solid #21262d; max-width: 100%; height: auto; }
   .legend { display: flex; gap: 1.5rem; font-size: 0.85rem; }
   .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -123,26 +125,63 @@ injectToLedCheckbox.addEventListener('change', () => {
   }).catch(() => {});
 });
 
-const SEQUENCE = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+const SEQUENCE = ['up','up','down','down','left','right','left','right','b','a'];
 const SEQUENCE_TIMEOUT_MS = 5000;
 let sequenceProgress = 0;
-let lastSequenceKeyTime = 0;
-document.addEventListener('keydown', (e) => {
+let lastSequenceStepTime = 0;
+
+function stepMatches(step, expected) {
+  if (step === expected) return true;
+  return step === 'tap' && (expected === 'b' || expected === 'a');
+}
+
+function advanceSequence(step) {
   const now = Date.now();
-  if (sequenceProgress > 0 && now - lastSequenceKeyTime > SEQUENCE_TIMEOUT_MS) {
+  if (sequenceProgress > 0 && now - lastSequenceStepTime > SEQUENCE_TIMEOUT_MS) {
     sequenceProgress = 0;
   }
-  const expected = SEQUENCE[sequenceProgress];
-  if (e.key === expected || e.key.toLowerCase() === expected) {
+  if (stepMatches(step, SEQUENCE[sequenceProgress])) {
     sequenceProgress++;
-    lastSequenceKeyTime = now;
+    lastSequenceStepTime = now;
     if (sequenceProgress === SEQUENCE.length) {
       sequenceProgress = 0;
       fetch('/api/rainbow-burst', { method: 'POST' }).catch(() => {});
     }
   } else {
-    sequenceProgress = (e.key === SEQUENCE[0]) ? 1 : 0;
-    lastSequenceKeyTime = now;
+    sequenceProgress = stepMatches(step, SEQUENCE[0]) ? 1 : 0;
+    lastSequenceStepTime = now;
+  }
+}
+
+const KEY_STEPS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', b: 'b', a: 'a' };
+document.addEventListener('keydown', (e) => {
+  const step = KEY_STEPS[e.key] || KEY_STEPS[e.key.toLowerCase()];
+  if (step) advanceSequence(step);
+});
+
+let touchStart = null;
+document.addEventListener('touchstart', (e) => {
+  const t = e.changedTouches[0];
+  touchStart = { x: t.clientX, y: t.clientY };
+}, { passive: true });
+document.addEventListener('touchmove', (e) => {
+  if (!touchStart) return;
+  const t = e.changedTouches[0];
+  if (t.clientY - touchStart.y > 10 && window.scrollY <= 0) {
+    e.preventDefault();
+  }
+}, { passive: false });
+document.addEventListener('touchend', (e) => {
+  if (!touchStart) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStart.x;
+  const dy = t.clientY - touchStart.y;
+  touchStart = null;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 10) {
+    advanceSequence('tap');
+  } else if (dist > 30) {
+    advanceSequence(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
   }
 });
 
