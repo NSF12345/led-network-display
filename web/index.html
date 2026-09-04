@@ -125,11 +125,15 @@ injectToLedCheckbox.addEventListener('change', () => {
   }).catch(() => {});
 });
 
+// Matches a fixed input pattern (keyboard below, touch further down)
+// and posts to the endpoint below once it's completed.
 const SEQUENCE = ['up','up','down','down','left','right','left','right','b','a'];
 const SEQUENCE_TIMEOUT_MS = 5000;
 let sequenceProgress = 0;
 let lastSequenceStepTime = 0;
 
+// A touch gesture has no equivalent of separate keys, so a generic tap
+// matches either of the final two steps; keyboard input must match exactly.
 function stepMatches(step, expected) {
   if (step === expected) return true;
   return step === 'tap' && (expected === 'b' || expected === 'a');
@@ -137,6 +141,7 @@ function stepMatches(step, expected) {
 
 function advanceSequence(step) {
   const now = Date.now();
+  // Reset progress if too long has passed since the last matching step.
   if (sequenceProgress > 0 && now - lastSequenceStepTime > SEQUENCE_TIMEOUT_MS) {
     sequenceProgress = 0;
   }
@@ -178,6 +183,8 @@ document.addEventListener('touchend', (e) => {
   const dy = t.clientY - touchStart.y;
   touchStart = null;
   const dist = Math.hypot(dx, dy);
+  // Short movement counts as a tap; a longer one as a swipe in whichever
+  // direction moved further; anything in between is ambiguous and ignored.
   if (dist < 10) {
     advanceSequence('tap');
   } else if (dist > 30) {

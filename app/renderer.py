@@ -123,7 +123,7 @@ class ParticleRenderer:
             brightness = 0.5 + 0.5 * intensity  # heavier traffic -> brighter
             trail = self.cfg.PARTICLE_TRAIL_LENGTH * (1.0 + intensity)  # and longer trail
             speed = base_speed * (1.0 - jitter + random.random() * 2 * jitter)
-            hue = random.random() if rainbow else None
+            hue = random.random() if rainbow else None  # distinct color per particle when active
             particles.append(Particle(position=start_pos, direction=direction, brightness=brightness,
                                        trail=trail, speed=speed, injected=injected, hue=hue))
         setattr(self, accumulator_attr, acc)
