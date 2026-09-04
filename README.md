@@ -136,7 +136,7 @@ Confirmed end-to-end (real traffic data, not just a connectivity check):
 | Ubiquiti | US-8-60W               | 7.4.1         | ✅ | ✅  | ✅ | ❔          | |
 | Ubiquiti | USW-Lite-16-PoE*       | 7.5.10*       | ✅ | ✅  | ✅ | ❔          | No web tooltip (sysDescr is kernel-only) |
 | Ubiquiti | USW-24-G2*             | 7.5.10*       | ✅ | ✅  | ✅ | ❌          | No web tooltip; no ENTITY-MIB either - model/firmware confirmed via app, not SNMP |
-| Ubiquiti | UDM-Pro (gateway)      | 5.1.31        | ✅ | ✅  | ✅ | ❌          | ifIndex 1 is loopback, not WAN - walk ifDescr |
+| Ubiquiti | UDM-Pro (gateway)      | 5.1.31        | ✅ | ✅  | ✅ | ❌          | ifIndex 1 is loopback, not WAN; WAN is ifIndex 4 (`eth8`) on this unit - walk ifDescr to confirm on yours, since this can shift depending on WAN2/SFP+ usage |
 | Ubiquiti | UAP-AC-Lite            | 6.8.2.15592   | ✅ | ✅  | ✅ | N/A         | Single wired uplink (`eth0`), not multi-port |
 | Ubiquiti | UAP-AC-LR              | 6.8.2.15592   | ✅ | ✅  | ✅ | N/A         | Single wired uplink (`eth0`), not multi-port |
 
