@@ -35,9 +35,16 @@ jobs:
 
       - name: Determine version
         id: ver
+        env:
+          # Untrusted workflow_dispatch input - passed via env rather than
+          # interpolated directly into the script, so it's just a string
+          # value to the shell, not text the YAML->shell templating step
+          # could be tricked into treating as script syntax.
+          BUMP: ${{ inputs.bump }}
+          MANUAL_VERSION: ${{ inputs.version }}
         run: |
-          if [ "${{ inputs.bump }}" = "manual" ]; then
-            version="${{ inputs.version }}"
+          if [ "$BUMP" = "manual" ]; then
+            version="$MANUAL_VERSION"
             if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               echo "::error::Version must be major.minor.patch (e.g. 0.1.0), got '$version'"
               exit 1
@@ -46,14 +53,14 @@ jobs:
             latest=$(git tag -l 'v*.*.*' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
             latest="${latest:-0.0.0}"
             IFS='.' read -r major minor patch <<< "$latest"
-            case "${{ inputs.bump }}" in
+            case "$BUMP" in
               major) major=$((major+1)); minor=0; patch=0 ;;
               minor) minor=$((minor+1)); patch=0 ;;
               bugfix) patch=$((patch+1)) ;;
             esac
             version="$major.$minor.$patch"
           fi
-          echo "Latest tag found: ${latest:-none}, bump: ${{ inputs.bump }}, new version: $version"
+          echo "Latest tag found: ${latest:-none}, bump: $BUMP, new version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Create and push tag
