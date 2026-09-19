@@ -14,6 +14,10 @@ COPY web/ ./web/
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 
+# Drop root - the app never needs it (no file writes, no privileged ports).
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
+USER appuser
+
 EXPOSE 8080
 
 CMD ["python", "-m", "app.main"]
