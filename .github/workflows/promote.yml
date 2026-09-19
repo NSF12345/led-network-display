@@ -16,9 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate version format
+        env:
+          # Untrusted workflow_dispatch input - passed via env rather than
+          # interpolated directly into the script (same reasoning as
+          # release.yml's Determine version step).
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
-          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Version must be major.minor.patch (e.g. 0.1.0), got '${{ inputs.version }}'"
+          if [[ ! "$VERSION_INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must be major.minor.patch (e.g. 0.1.0), got '$VERSION_INPUT'"
             exit 1
           fi
 
@@ -35,8 +40,10 @@ jobs:
         # registry API - no rebuild, no pulling image content. Docker
         # image names must be lowercase, but github.repository preserves
         # the owner's actual casing (NSF12345/...) - lowercase it first.
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           repo="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           docker buildx imagetools create \
             -t "ghcr.io/$repo:latest" \
-            "ghcr.io/$repo:${{ inputs.version }}"
+            "ghcr.io/$repo:$VERSION_INPUT"
