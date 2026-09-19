@@ -54,7 +54,7 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "value=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=sha-${GITHUB_SHA::7}-$(date -u +%Y%m%d-%H%M)" >> "$GITHUB_OUTPUT"
+            echo "value=sha-${GITHUB_SHA::7}-$(date -u +%Y%m%d-%H%M-%Z)" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: docker/build-push-action@v6
