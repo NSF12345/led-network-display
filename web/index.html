@@ -242,8 +242,7 @@ async function loadSourceInfo() {
     const res = await fetch('/api/info');
     const info = await res.json();
     if (info.source === 'snmp') {
-      const hostLabel = info.host_name ? `${info.host} (${info.host_name})` : info.host;
-      sourceBanner.textContent = `LIVE DATA - ${info.switch_name} on ${hostLabel}, ${formatPortLabel(info.switch_port)}`;
+      sourceBanner.textContent = `LIVE DATA - ${info.switch_name} on ${info.host}, ${formatPortLabel(info.switch_port)}`;
       sourceBanner.className = 'snmp';
       sourceBanner.title = `${formatSysDescr(info.sys_descr)} (SNMP${info.snmp_version})`;
     } else {
