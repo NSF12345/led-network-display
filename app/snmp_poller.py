@@ -21,6 +21,7 @@ against real hardware - see README's "Known working devices" table.
 """
 import asyncio
 import logging
+import socket
 import time
 
 from .traffic_rates import TrafficRates
@@ -194,10 +195,22 @@ class SnmpPoller:
             sys_descr = str(var_binds[1][1]).strip()
             if_name = str(var_binds[2][1]).strip()
             switch_name = sys_name or sys_descr.split(",")[0].strip() or self.cfg.SNMP_HOST
-            return {"switch_name": switch_name, "switch_port": if_name, "sys_descr": sys_descr}
+            info = {"switch_name": switch_name, "switch_port": if_name, "sys_descr": sys_descr}
         except Exception:
             log.exception("Failed to fetch device info (non-fatal, continuing)")
             return {}
+
+        # Best-effort reverse DNS for the SNMP host's IP - often empty on a
+        # home LAN unless PTR records are actually configured, that's fine,
+        # just omit it rather than treating it as an error.
+        try:
+            host_name = await asyncio.wait_for(
+                asyncio.to_thread(socket.gethostbyaddr, self.cfg.SNMP_HOST), timeout=2.0
+            )
+            info["host_name"] = host_name[0]
+        except Exception:
+            pass
+        return info
 
     async def poll_once(self) -> TrafficRates:
         rx_octets, tx_octets = await self._fetch_counters()

@@ -58,6 +58,7 @@ class WebsocketOutput(OutputSink):
                 "switch_name": self.device_info.get("switch_name") or self.cfg.SNMP_HOST,
                 "switch_port": self.device_info.get("switch_port") or f"ifIndex {self.cfg.SNMP_IF_INDEX}",
                 "sys_descr": self.device_info.get("sys_descr") or "",
+                "host_name": self.device_info.get("host_name") or "",
                 "snmp_version": self.cfg.SNMP_VERSION,
             }
         else:
