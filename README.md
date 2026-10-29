@@ -7,17 +7,17 @@ WLED. Inspired by
 - same concept (two particle streams, RX/TX, real-time SNMP polling),
 reimplemented here in Python instead of Node-RED.
 
-> **This project was vibecoded** - I want to be upfront that a lot of
-> this was built through conversation with an AI assistant (Claude).
-> I understand people have mixed feelings about AI-assisted code, and
-> generally agree with those feelings. But for a personal, one-off
-> homelab project like this - something you just want to get up and
-> running - I think it's a genuinely great tool to have at my
-> disposal. And to be honest, I used this project to build a better
+> **LLM assisted this with project.** Much of the code and documentation was
+> written with Large Language Models (mostly Claude, via Claude Code), and commits it helped
+> with are marked `Co-Authored-By: Claude`. I know people have mixed feelings
+> about LLM-written code, and I share some of them. But for a personal homelab
+> project like this, something you just want up and running, it's a genuinely
+> great tool to have. And to be honest, I used this project to build a better
 > understanding of Agents & Build/Release Workflows.
 >
 > I have taken great care to review & understand all code changes
-> made by AI tools within this project.
+> made by LLM tools within this project. As the maintainer, I'm
+> still responsible for everything in this repo.
 
 ![Live SNMP data](docs/live.gif)
 
